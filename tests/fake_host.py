@@ -106,6 +106,8 @@ class FakeHost:
         self.terminals, self.watches, self.tool_calls = [], [], []
         self.current_focus = SimpleNamespace(deck=None, slide=None, scope="slide")
         self.active = True
+        self.legacy_value = None
+        self.model_notifications = []
         self.argv = [sys.executable, "-m", "slidemage", "--plugin", "claude:hook"]
 
     def cache_dir(self):
@@ -166,11 +168,28 @@ class FakeHost:
     def settings(self):
         return self.store
 
+    def legacy_secret(self, name):
+        assert name == "anthropic_api_key"
+        return self.legacy_value
+
+    def legacy_ollama_host(self): return "http://localhost:11434"
+    def model_choices_changed(self, route_id): self.model_notifications.append(route_id)
+    def acquire_route_task(self, route_id, label): self._unavailable()
+    def run_in_background_with_progress(self, work, progress, done):
+        self.run_in_background(lambda: work(progress), done)
+    def style_chat_widget(self, widget, role): pass
+    def theme_color(self, name): return "#000000"
+    def Surface(self): self._unavailable()
+    def Button(self, *args, **kwargs): self._unavailable()
+    def Chip(self, *args, **kwargs): self._unavailable()
+    def IconButton(self, *args, **kwargs): self._unavailable()
+    def IconLabel(self, *args, **kwargs): self._unavailable()
+
     def terminal(self):
         return self
 
     def start(self, argv, env=None, cwd=None, *, on_output=None, on_exit=None,
-              with_widget=True, cols=80, rows=24):
+              with_widget=True, cols=80, rows=24, widget=None):
         terminal = FakeTerminal(argv, env, cwd, on_output=on_output, on_exit=on_exit,
                                 with_widget=with_widget, cols=cols, rows=rows)
         self.terminals.append(terminal)
@@ -219,3 +238,26 @@ class FakeHost:
     def caption(self, text, tone=""):
         from PySide6.QtWidgets import QLabel
         return QLabel(text)
+
+
+class FakeSurfaceContext:
+    def __init__(self, host):
+        self.host = host
+        self.project_root = host.root
+        self.changes = []
+        self.current_scope = "slide"
+
+    def selected_route(self, route_id, task, choice=""):
+        from slidemage.plugin_api import Route
+        model, _, effort = choice.partition(":")
+        return Route(route_id, task, model, effort or None)
+
+    def focus_details(self):
+        focus = self.host.current_focus
+        return SimpleNamespace(slide_id=None, slide=focus.slide, deck=focus.deck, view="", language="", dirty=False)
+
+    def apply_external_edits(self, changes): self.changes.append(changes)
+    def build_tools(self, host, scope, cancel):
+        return host.ai_tools(scope, focus_slide=host.current_focus.slide, cancel=cancel)
+    def scope(self): return self.current_scope
+    def close(self): pass

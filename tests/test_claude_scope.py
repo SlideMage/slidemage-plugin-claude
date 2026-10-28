@@ -61,10 +61,11 @@ def test_failed_focus_publish_is_retried_without_a_focus_change(qapp, tmp_path, 
     from slidemage.project import ProjectContext
     from claude.code.terminal.session import ClaudeCodeSession
 
-    from fake_host import FakeHost
+    from fake_host import FakeHost, FakeSurfaceContext
     host = FakeHost(tmp_path)
     host.current_focus = SimpleNamespace(deck=None, scope="slide", slide=tmp_path / "slides/abc-EN-Hello-current.tex")
-    session = ClaudeCodeSession(host, ProjectContext.at(tmp_path), tmp_path / "fake-claude", on_change=lambda _: None)
+    from claude.code import launch
+    session = ClaudeCodeSession(host, FakeSurfaceContext(host), tmp_path / "fake-claude", launch, claude_scope, None, lambda: "hook")
     session._focus_file = tmp_path / "focus.json"
     changed, attempts = [], []
     session.focus_changed.connect(lambda: changed.append(True))
@@ -109,12 +110,12 @@ def test_a_restart_resumes_the_conversation_only_when_claude_code_saved_it(qapp,
         def stop(self):
             pass
 
-    from fake_host import FakeHost
+    from fake_host import FakeHost, FakeSurfaceContext
     host = FakeHost(tmp_path)
-    monkeypatch.setattr(session_mod, "McpServer", FakeServer)
+    from claude.code import launch
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "config"))
-    session = session_mod.ClaudeCodeSession(host, ProjectContext.at(tmp_path), tmp_path / "fake-claude",
-                                           on_change=lambda _: None)
+    session = session_mod.ClaudeCodeSession(host, FakeSurfaceContext(host), tmp_path / "fake-claude",
+                                           launch, claude_scope, FakeServer, lambda: "hook")
     try:
         session.start(80, 24)
         first = session.session_id

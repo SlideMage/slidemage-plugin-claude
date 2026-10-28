@@ -33,7 +33,7 @@ claude/                  the plugin
   code/terminal/         the embedded terminal: session, view, unsent-prompt reader
 tools/                   claude_task_benchmark.py
 tests/                   the plugin's tests
-docs/                    plan, handover, and the list of slidemage.* imports still to replace
+docs/                    plan, handover, and remaining integration gaps
 ```
 
 **Status: step 6b is a DRAFT.** It uses the implemented AI host services, but route/AI-settings registration and

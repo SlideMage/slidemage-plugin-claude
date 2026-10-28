@@ -81,14 +81,15 @@ class ClaudeCodeRoute:
         from claude.code.runner import SlideTranslator
         return SlideTranslator(ctx, self._claude(), route.model, route.effort)
 
-    def chat_surface(self, app, state, scope, tasks):
+    def chat_surface_v2(self, context):
         from claude.code.terminal.view import ClaudeCodeView
-        # The public API does not yet provide GUI workspace construction or applying external edits.
-        from slidemage.ui.workspace.chat.gui_workspace import GuiWorkspace
-        from slidemage.ui.workspace.terminal.sync import DiskSync
-        workspace = GuiWorkspace(app)
-        sync = DiskSync(app, state.project.root)
-        return ClaudeCodeView(app, state, scope, tasks, host=self.host, on_change=sync._apply, workspace=workspace)
+        from claude.code import launch, scope
+        from claude.code.mcp_server import McpServer
+        return ClaudeCodeView(self.host, context, launch, scope, McpServer,
+                              lambda: launch.hook_command(self.host))
+
+    def chat_surface(self, *args, **kwargs):
+        return None  # the public v2 context is required for the terminal
 
     def settings_section(self):
         return None  # registered once for both routes with add_settings_section

@@ -158,3 +158,17 @@ def test_a_translation_batch_counts_what_failed(ctx, root, claude, monkeypatch):
     summary = alt_draft.run_translation_batch(ctx, 
         ["media/a.png", "media/b.png"], claude_images.ClaudeTranslationBackend(ctx, claude.path))
     assert (summary.attempted, summary.written) == (2, 1) and "media/b.png" in summary.errors[0]
+
+
+def test_route_context_uses_the_project_image_prompt(ctx, root, claude, monkeypatch):
+    from types import SimpleNamespace
+    from slidemage import draft_prompts
+    slide = add_pictures(monkeypatch, root, chart={})
+    draft_prompts.set_custom_prompt(ctx, draft_prompts.KIND_IMAGE_DRAFT, "Project image instructions")
+    claude.script({"answer": ANSWER})
+    route_ctx = SimpleNamespace(root=root, de_address="Sie", glossary="")
+    result = claude_images.ClaudeDraftBackend(route_ctx, claude.path).draft(
+        root / "media" / "chart.png", alt_draft.build_context(ctx, slide, "media/chart.png"))
+    assert result.ok
+    flags = claude.calls()[0]["argv"]
+    assert flags[flags.index("--system-prompt") + 1] == "Project image instructions"

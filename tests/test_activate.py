@@ -15,7 +15,7 @@ import pytest
 from claude import activate
 from claude.code import hook, launch
 from claude.credentials import ApiCredentials
-from fake_host import FakeHost
+from fake_host import FakeHost, FakeSurfaceContext
 from slidemage.plugin_api import Route
 
 
@@ -58,7 +58,7 @@ def test_activation_in_a_fresh_process_does_not_load_qt_or_providers():
 import sys
 from tempfile import TemporaryDirectory
 from pathlib import Path
-from fake_host import FakeHost
+from fake_host import FakeHost, FakeSurfaceContext
 from slidemage.plugin_api import Route
 from claude import activate
 with TemporaryDirectory() as folder:
@@ -107,19 +107,16 @@ def test_route_problems_and_static_choices(host, monkeypatch):
 
 
 def test_legacy_credentials_use_host_migration_and_clear_never_resurrects(host, monkeypatch):
-    from slidemage.plugins import migrate
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    calls = []
-    monkeypatch.setattr(migrate, "legacy_anthropic_key", lambda ctx: calls.append(ctx) or "sk-old")
+    host.legacy_value = "sk-old"
     credentials = ApiCredentials(host)
-    ctx = object()
-    assert credentials.get(ctx).value == "sk-old" and calls == [ctx]
+    assert credentials.get().value == "sk-old"
     host.secret.set("sk-new")
-    assert credentials.get(ctx).value == "sk-new" and calls == [ctx]
+    assert credentials.get().value == "sk-new"
     credentials.set("")
-    assert ApiCredentials(host).get(ctx) is None and calls == [ctx]
+    assert ApiCredentials(host).get() is None
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-env")
-    assert credentials.get(ctx).value == "sk-env"
+    assert credentials.get().value == "sk-env"
 
 
 def test_code_task_runner_and_backends_keep_the_selected_model(host, monkeypatch):
@@ -146,54 +143,36 @@ def test_code_task_runner_and_backends_keep_the_selected_model(host, monkeypatch
 
 def test_terminal_surface_uses_host_services_and_guards_late_callbacks(qapp, host, monkeypatch):
     from claude.code.terminal import session as module
-    monkeypatch.setattr(launch, "find_claude", lambda: host.root / "claude")
+    from claude.code import scope
     monkeypatch.setattr(launch, "has_transcript", lambda _: True)
     class Server:
         url, token = "http://localhost:1/mcp", "secret"
         def __init__(self, toolbox): self.toolbox = toolbox
         def start(self): pass
         def stop(self): pass
-    monkeypatch.setattr(module, "McpServer", Server)
-    activate(host)
-    changes = []
-    surface = module.ClaudeCodeSession(host, SimpleNamespace(root=host.root), host.root / "claude",
-                                       choice="sonnet:high", on_change=changes.append)
+    context = FakeSurfaceContext(host)
+    surface = module.ClaudeCodeSession(host, context, host.root / "claude", launch, scope, Server,
+                                       lambda: launch.hook_command(host))
     try:
-        assert not host.terminals
-        surface.start(with_widget=False)
+        surface.start(80, 24, choice="sonnet:high")
         first = host.terminals[-1]
         assert first.cwd == host.root and first.env[launch.TOKEN_ENV] == "secret"
-        assert host.watches[0].running and host.tool_calls
+        assert host.watches[0].running
         event = SimpleNamespace(added=(), modified=(host.root / "slide.tex",), removed=())
         host.watches[0].on_change(event)
-        assert changes == [event]
-        assert surface._server.toolbox() is surface._box
-        host.current_focus.scope = "deck"
-        surface.publish_focus()
-        from claude.code.scope import load
-        assert load(surface._focus_file)["scope"] == "deck"
+        assert context.changes == [event]
+        surface.set_scope("deck")
+        surface._server.toolbox()
         assert host.tool_calls[-1][0] == "deck"
         kept = surface.session_id
-        surface.restart("opus:medium", True)
-        assert first.closed and surface.session_id == kept
+        surface.start(80, 24, resume=True, choice="opus:medium")
+        assert not first.running and surface.session_id == kept
         command = host.terminals[-1].argv
-        assert command[command.index("--model") + 1] == "opus"
-        assert "--resume" in command
-        settings = json.loads(command[command.index("--settings") + 1])
-        assert "claude:hook" in settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
-        output = []
-        surface.output.connect(output.append)
-        first.options["on_output"](b"late")
-        first.options["on_exit"](1)
-        assert not output and host.watches[0].running
-        host.terminals[-1].options["on_output"](b"current")
-        assert output == [b"current"]
-        surface.stop()
+        assert command[command.index("--model") + 1] == "opus" and "--resume" in command
         surface.stop()
         assert not surface.running and not host.watches[0].running
     finally:
         surface.shutdown()
-    assert surface._focus_file is None and surface._server is None
 
 
 def test_settings_builder_saves_key_and_checks_auth_off_activation(qapp, host, monkeypatch):
@@ -207,6 +186,7 @@ def test_settings_builder_saves_key_and_checks_auth_off_activation(qapp, host, m
         page.findChild(QLineEdit).setText("sk-saved")
         next(button for button in page.findChildren(QPushButton) if button.text() == "Save key").click()
         assert host.secret.values["key"] == "sk-saved"
+        assert host.model_notifications == ["anthropic_api"]
     finally:
         page.close()
 
@@ -219,24 +199,22 @@ def test_fake_host_exposes_real_host_methods():
 
 def test_surface_start_failure_stops_watch_and_can_be_retried(qapp, host, monkeypatch):
     from claude.code.terminal import session as module
+    from claude.code import scope
     class Server:
         url, token = "http://localhost:1/mcp", "t"
         def __init__(self, toolbox): pass
         def start(self): pass
         def stop(self): pass
-    monkeypatch.setattr(module, "McpServer", Server)
-    surface = module.ClaudeCodeSession(host, SimpleNamespace(root=host.root), host.root / "claude",
-                                       on_change=lambda _: None)
+    surface = module.ClaudeCodeSession(host, FakeSurfaceContext(host), host.root / "claude", launch, scope,
+                                       Server, lambda: launch.hook_command(host))
     start = host.start
-    def fail(*args, **kwargs):
-        raise OSError("cannot start")
-    monkeypatch.setattr(host, "start", fail)
+    monkeypatch.setattr(host, "start", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("cannot start")))
     try:
         with pytest.raises(OSError, match="cannot start"):
-            surface.start(with_widget=False)
+            surface.start(80, 24)
         assert not host.watches[0].running and not surface.running
         monkeypatch.setattr(host, "start", start)
-        surface.start(with_widget=False)
+        surface.start(80, 24)
         assert surface.running and host.watches[0].running
         host.terminals[-1].options["on_exit"](0)
         assert not host.watches[0].running

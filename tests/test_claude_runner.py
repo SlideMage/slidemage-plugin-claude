@@ -185,3 +185,10 @@ def test_a_request_without_images_stays_plain_text(claude):
     ("Not logged in", ""), ("", "")])
 def test_limit_kind_tells_rate_limits_from_the_exhausted_usage(message, kind):
     assert claude_runner.limit_kind(message) == kind
+
+
+def test_route_context_validates_task_answer(claude):
+    claude.script({"answer": GOOD})
+    ctx = SimpleNamespace(root=claude.ctx.root, de_address="Sie", glossary="")
+    outcome = claude_runner.run_task(ctx, claude.path, claude_tasks.TRANSLATE, LF, "request")
+    assert outcome.status == DONE and outcome.text == GOOD["body"]

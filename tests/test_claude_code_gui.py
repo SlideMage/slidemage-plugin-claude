@@ -79,7 +79,8 @@ def env(qapp, tmp_path, monkeypatch):
     from slidemage.plugins.manifest import read_manifest
     from claude.code.route import ClaudeCodeRoute
     routes.all()  # initialize built-ins before replacing this route for the integration fixture
-    host = PluginHost(read_manifest(Path(__file__).resolve().parents[1]), context)
+    from slidemage.ui.plugin_ui import HOST_UI
+    host = PluginHost(read_manifest(Path(__file__).resolve().parents[1]), context, HOST_UI)
     monkeypatch.setitem(routes._routes, "claude_code", ClaudeCodeRoute(host))
     e.window = build_window(monkeypatch, context)
     host.ui = e.window
@@ -170,13 +171,14 @@ def test_a_process_that_cannot_start_is_shown_in_the_terminal_not_raised(env, mo
     def busy(self):
         raise OSError("port busy")
 
-    original = session_module.McpServer.start
-    monkeypatch.setattr(session_module.McpServer, "start", busy)
+    from claude.code.mcp_server import McpServer
+    original = McpServer.start
+    monkeypatch.setattr(McpServer, "start", busy)
     use_claude_code(env)
     wait_until(lambda: env.view.status.text() == "Could not start")
     wait_until(lambda: "could not be started" in terminal_text(env).replace("\n", " "))     # the terminal is narrow
     assert not env.view.session.running
-    monkeypatch.setattr(session_module.McpServer, "start", original)      # the port is free again: Restart works
+    monkeypatch.setattr(McpServer, "start", original)      # the port is free again: Restart works
     env.view.restart_button.click()
     wait_until(lambda: env.view.session.running and env.view.status.text() == "Running")
 
@@ -509,12 +511,14 @@ def test_mcp_toolbox_reads_scope_and_focus_on_gui_thread(env):
 
     from slidemage.plugins.host import PluginHost
     from slidemage.plugins.manifest import read_manifest
-    from slidemage.ui.workspace.chat.gui_workspace import GuiWorkspace
-
-    host = PluginHost(read_manifest(Path(__file__).resolve().parents[1]), env.window.project)
-    workspace = GuiWorkspace(env.window)
-    session = session_module.ClaudeCodeSession(host, env.window.project, env.fake,
-                                               on_change=lambda _: None, workspace=workspace)
+    from slidemage.ui.workspace.chat.plugin_surface import ChatSurfaceContext
+    from slidemage.ui.plugin_ui import HOST_UI
+    from claude.code import scope, launch
+    from claude.code.mcp_server import McpServer
+    host = PluginHost(read_manifest(Path(__file__).resolve().parents[1]), env.window.project, HOST_UI)
+    context = ChatSurfaceContext(env.window, env.window.state, env.window.side_panels.assistant.scope, env.window.side_panels.assistant.tasks)
+    session = session_module.ClaudeCodeSession(host, context, env.fake, launch, scope, McpServer,
+                                               lambda: launch.hook_command(host))
     try:
         env.window.open_slide_editor(env.path)
         box = on_thread(session._toolbox)
@@ -523,5 +527,5 @@ def test_mcp_toolbox_reads_scope_and_focus_on_gui_thread(env):
         box = on_thread(session._toolbox)
         assert box.ctx.scope == claude_scope.DECK and box.ctx.focus_slide == env.path
     finally:
-        workspace.close()
+        context.close()
         session.shutdown()

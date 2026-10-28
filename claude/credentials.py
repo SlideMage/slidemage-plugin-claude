@@ -1,11 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Stefan Palan, Jürgen Fleiß
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""The host owns secret storage and legacy-key lookup; activation only obtains a handle.
-
-The legacy migration helper is still private in 3d. This import is deferred until
-lookup, retained as a DRAFT dependency until core exposes migration through plugin_api.
-Old copies are read only, never silently copied or cleared by activation.
-"""
+"""The host owns secret storage and legacy-key lookup; activation only obtains a handle."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,6 +22,7 @@ class ApiKey:
 
 class ApiCredentials:
     def __init__(self, host: Host) -> None:
+        self.host = host
         self.store: Credentials = host.credentials(env_var=ENV_VAR)
         self.settings = host.settings()
 
@@ -34,7 +30,7 @@ class ApiCredentials:
         value = self.store.get()
         if value:
             return ApiKey(value, self.store.where())
-        return None if self.settings.get("legacy_key_replaced", False) else _legacy_key(ctx)
+        return None if self.settings.get("legacy_key_replaced", False) else _legacy_key(ctx or self.host)
 
     def set(self, key: str) -> str:
         where = self.store.set(key.strip())
@@ -45,12 +41,7 @@ class ApiCredentials:
 
 
 def _legacy_key(ctx: Any = None) -> ApiKey | None:
-    # DRAFT: 3d implements migration, but has no public host/plugin_api entry for it yet.
-    from slidemage.plugins.migrate import legacy_anthropic_key
-    if ctx is None:
-        from slidemage.project import from_environment
-        ctx = from_environment()
-    value = legacy_anthropic_key(ctx)
+    value = ctx.legacy_secret("anthropic_api_key")
     return ApiKey(value, "legacy SlideMage storage") if value else None
 
 

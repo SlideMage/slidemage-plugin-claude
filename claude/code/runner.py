@@ -24,8 +24,10 @@ from pathlib import Path
 
 from claude._processes import no_console_kwargs
 from typing import Any
-from slidemage.ai import tasks as claude_tasks, translation_style
+import slidemage.plugin_api as claude_tasks
+from slidemage.plugin_api import Outcome
 from claude.code.launch import clean_environment
+from claude.code._project import project_for_helpers
 
 # The default of Claude Code tasks: Haiku at medium effort, tested by the user as good enough (2026-10-13;
 # docs/CLAUDE_CODE_TASKS_BENCHMARK.md measured Sonnet). A text task takes 2-10 s there (the slowest run 13 s),
@@ -55,21 +57,6 @@ def limit_kind(message: str) -> str:
     if "usage limit" in text:
         return USAGE_LIMIT
     return RATE_LIMIT if any(word in text for word in ("rate limit", "429", "overloaded", "concurren")) else ""
-
-
-@dataclass
-class Outcome:
-    status: str                      # DONE, NOTHING, FAILED or CANCELLED
-    text: str = ""                   # the new text, for DONE
-    message: str = ""                # why, for FAILED
-    attempts: int = 0                # processes started: 2 when the first answer needed a repair
-    first_s: float | None = None     # until the first answer event of the first process
-    elapsed_s: float = 0.0           # until the outcome is known
-    turns: int = 0
-    tokens_in: int = 0               # input tokens, cached ones included
-    tokens_out: int = 0
-    note: str = ""                   # the model's remark on its answer (claude_tasks.answer_note)
-    measured: object = None          # Make readable: the readability Report of the new text as a draft, or why not (str)
 
 
 @dataclass
@@ -207,7 +194,7 @@ def judge(ctx: Any, task: claude_tasks.Task, captured: str, answer: dict | None,
     changes nothing; the problems, when the answer is refused (then `outcome` says so, and they go into the repair
     request)."""
     outcome.note = claude_tasks.answer_note(task, answer)
-    text, problems = claude_tasks.check(ctx, task, captured, answer, span)
+    text, problems = claude_tasks.check(project_for_helpers(ctx), task, captured, answer, span)
     if problems:
         outcome.message = f"{who}'s answer was refused: " + "; ".join(problems)
     else:
@@ -266,8 +253,8 @@ class SlideTranslator:
 
     def translate(self, body: str) -> tuple[str, str | None]:
         """(translation, error) of an English slide body into German, with the line ends of `body`."""
-        request = claude_tasks.translate_request(body, "EN", "DE", translation_style.de_address(self.ctx),
-                                                 translation_style.glossary(self.ctx))
+        request = claude_tasks.translate_request(body, "EN", "DE", self.ctx.de_address,
+                                                 self.ctx.glossary)
         outcome = run_task(self.ctx, self.claude, claude_tasks.TRANSLATE, body, request, self.model, self.effort,
                            cancel=self.cancel)
         if outcome.status == DONE:

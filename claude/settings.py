@@ -36,6 +36,7 @@ def build(host: Host, credentials: ApiCredentials):
             source.setText(f"Could not save the key: {exc}")
             return
         source.setText(f"Saved in {where}." if where else "Stored key cleared; an environment key still takes precedence.")
+        host.model_choices_changed("anthropic_api")
         page.changed.emit()
     save.clicked.connect(save_key)
 

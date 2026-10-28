@@ -21,8 +21,7 @@ from pathlib import Path
 from claude._processes import no_console_kwargs
 from slidemage.plugin_api import Host
 from claude.code.scope import FOCUS_ENV
-from slidemage.ai.image_instructions import IMAGE_DESCRIPTION_RULES
-from slidemage.ai.tools import CLAUDE_CODE_PRE_APPROVED
+from slidemage.plugin_api import IMAGE_DESCRIPTION_RULES, CLAUDE_CODE_PRE_APPROVED
 
 SERVER_NAME = "slidemage"
 TOKEN_ENV = "SLIDEMAGE_MCP_TOKEN"

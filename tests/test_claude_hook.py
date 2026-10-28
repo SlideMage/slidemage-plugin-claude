@@ -18,10 +18,11 @@ from claude.code import hook as claude_hook
 from slidemage.slide_protection import PROTECTED_MESSAGE
 
 from slidemage.project import ProjectContext
+from slidemage.plugins.hook import HookContext
 
 @pytest.fixture
 def ctx(root):
-    return ProjectContext.at(root)
+    return HookContext(ProjectContext.at(root))
 
 CURRENT = "abc-EN-Hello-current.tex"
 FROZEN = "abc-EN-Hello-v1-0-0.tex"

@@ -15,13 +15,16 @@ import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from slidemage import alt_draft, alt_images, translation_prompts
+import slidemage.plugin_api as alt_draft
+import slidemage.plugin_api as alt_images
+import slidemage.plugin_api as translation_prompts
 from typing import Any
-from slidemage.ai import tasks as claude_tasks
+import slidemage.plugin_api as claude_tasks
 from claude.code import runner as claude_runner
+from claude.code._project import project_for_helpers
 
 # The tasks of the bubbles. Their rules are the user's own prompts, which the backends put in at each call.
-DESCRIBE = claude_tasks.Task("describe_images", "", alt_draft.RESPONSE_SCHEMA)
+DESCRIBE = claude_tasks.Task("describe_images", "", alt_draft.IMAGE_DESCRIPTION_SCHEMA)
 TRANSLATE = claude_tasks.Task("translate_images", "", {
     "type": "object", "properties": {key: {"type": "string"} for key in ("short_de", "long_de", "takeaway_de")},
     "required": ["short_de", "long_de", "takeaway_de"], "additionalProperties": False})
@@ -62,7 +65,7 @@ class ClaudeDraftBackend(_ClaudeBackend):
         started = time.monotonic()
         if image_path.suffix.lower() not in claude_runner.MEDIA_TYPES:
             return alt_draft.DraftResult(model=self.label, error=f"Claude cannot read {image_path.suffix} images")
-        answer, error = self._ask(replace(DESCRIBE, rules=alt_draft.effective_system_prompt(self.ctx)),
+        answer, error = self._ask(replace(DESCRIBE, rules=alt_draft.effective_system_prompt(project_for_helpers(self.ctx))),
                                   alt_draft.build_prompt(context), claude_runner.IMAGE_DEADLINE_S, (image_path,))
         elapsed = time.monotonic() - started
         if error:
@@ -77,7 +80,7 @@ class ClaudeTranslationBackend(_ClaudeBackend):
     def translate(self, entry: alt_images.ImageEntry) -> alt_draft.TranslationResult:
         started = time.monotonic()
         source_hash = alt_images.en_text_hash(entry)       # of the text translated, as in ModelTranslationBackend
-        prompt = translation_prompts.get_effective_prompt(self.ctx, self.model, "en", "de").prompt
+        prompt = translation_prompts.get_effective_prompt(project_for_helpers(self.ctx), self.model, "en", "de").prompt
         request = "\n\n".join(("Translate the fields of this image description. A field that is empty stays empty.",
                                f"short:\n{entry.short}", f"long:\n{entry.long}", f"takeaway:\n{entry.takeaway_default}"))
         answer, error = self._ask(replace(TRANSLATE, rules=prompt), request, claude_runner.TEXT_DEADLINE_S)

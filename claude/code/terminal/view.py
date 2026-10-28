@@ -1,8 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Stefan Palan, Jürgen Fleiß
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""The Claude Code terminal conversation surface.
-
-The Claude Code body of the assistant card (assistant.py), shown while the route is Cloud · Claude Code: the
+"""The Claude Code body of the assistant card (assistant.py), shown while the route is Cloud · Claude Code: the
 user's own `claude`, running in a terminal in the project folder, connected to SlideMage (session.py).
 
 Two bodies. No `claude` found, or not signed in (`claude auth status`): an amber card says so, with "Check again"
@@ -25,16 +23,8 @@ from PySide6.QtCore import QCoreApplication, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPalette, QShowEvent
 from PySide6.QtWidgets import QFileDialog, QFrame, QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout
 
-from slidemage.ai import ai_profile, tasks as claude_tasks
-from claude.code import launch as claude_launch
-from claude.code.scope import DECK
-from slidemage.plugin_api import Host
-from slidemage.ui.kit import kit_qss as q
-from slidemage.ui.kit.widgets import Button, Chip, IconButton, IconLabel, SegmentedControl, Surface, caption
-from slidemage.ui.workspace.attachments import place_file, save_image
-from slidemage.ui.workspace.state import WorkspaceState
-from claude.code.terminal.draft import input_box_shown, paste_bytes, prompt_draft
-from slidemage.ui.workspace.task_bubbles import TaskRunner, bubbles
+from slidemage.plugin_api import ChatSurfaceContext, Host
+from .draft import input_box_shown, paste_bytes, prompt_draft
 
 SETUP, TERMINAL = 0, 1
 # switch_session: the pause between the two Esc of Esc Esc, and the time Claude Code gets to save the draft.
@@ -44,48 +34,43 @@ DRAFT_POLL_MS, DRAFT_WAIT_MS = 300, 20_000
 NEVER_SENT = "Cloud stays selected. Nothing is sent and no other model is used"
 INSTALL_TEXT = ("SlideMage runs your own Claude Code here, in the project folder, with your Claude "
                 "subscription. It is not installed on this computer (or not found).")
-INSTALL_STEPS = (f'Install it as the <a href="{claude_launch.INSTALL_URL}">Claude Code setup guide</a> says, '
-                 "start <b>claude</b> once in a terminal to sign in, then come back and check again.")
-NOT_INSTALLED = ("Claude Code is not installed", f"{INSTALL_TEXT} {NEVER_SENT} until it is.", INSTALL_STEPS, "Check again")
 NOT_SIGNED_IN = ("Claude Code is not signed in", f"{NEVER_SENT} until you sign in.", "", "Sign in…")
 
 
-class ClaudeCodeView(Surface):
+class ClaudeCodeView(QFrame):
+    subtitle = "Terminal · permissions are handled in Claude Code"      # the assistant header's note for this surface
     notice = Signal(str, str)       # a line for the assistant's task row: its text and tone
     setup_changed = Signal()        # the amber card came up or went (the task buttons wait for it)
 
-    def __init__(self, app, state: WorkspaceState, scope: SegmentedControl, tasks: TaskRunner, *,
-                 host: Host, on_change, workspace) -> None:
-        """`scope` is the assistant header's; `tasks` its runner, which the terminal's translate tool asks."""
+    def __init__(self, host: Host, context: ChatSurfaceContext, launch, scope, server, hook_command) -> None:
         super().__init__()
-        self.host, self._on_change, self.workspace = host, on_change, workspace
-        self.app = app
-        self.state = state
-        self.scope = scope
-        self.tasks = tasks
+        self.host, self._surface_context = host, context
+        self._launch, self._scope, self._server, self._hook_command = launch, scope, server, hook_command
+        host.style_chat_widget(self, "surface")
         self.session = None                       # created with the terminal
         self.terminal = None
         self._started = False
         self._closed = False
         self._restart_on_show = False             # the route left and came back: a new session
-        self._checking = None
+        self._checking = False
         self._claude: Path | None = None
         self._size = (80, 24)
-        scope.changed.connect(self._on_scope)
+        context.on_scope_changed(self._on_scope)
         self._stack = QStackedWidget()
-        self._stack.setObjectName(q.SURFACE)
+        host.style_chat_widget(self._stack, "surface")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._stack)
         self._stack.addWidget(self._build_setup())
-        self._terminal_page = Surface()
+        self._terminal_page = host.Surface()
         self._terminal_layout = QVBoxLayout(self._terminal_page)
         self._terminal_layout.setContentsMargins(0, 0, 0, 0)
         self._terminal_layout.setSpacing(4)
         self._terminal_layout.addLayout(self._build_status_row())
-        self.caption = caption("")
+        self.caption = host.caption("")
         self.caption.setTextFormat(Qt.TextFormat.RichText)
-        self.caption.linkActivated.connect(lambda _link: self.app.ai_route.open_setup())
+        self.caption.linkActivated.connect(lambda _link: (
+            self._surface_context.open_ai_setup()))
         self._terminal_layout.addWidget(self.caption)
         self._stack.addWidget(self._terminal_page)
         self.refresh_caption()
@@ -94,20 +79,20 @@ class ClaudeCodeView(Surface):
 
     # -- building ---------------------------------------------------------------------------
 
-    def _build_setup(self) -> Surface:
+    def _build_setup(self):
         """The amber card that replaces the terminal while Claude Code cannot be used."""
-        page = Surface()
+        page = self.host.Surface()
         box = QVBoxLayout(page)
         box.setAlignment(Qt.AlignmentFlag.AlignTop)
         card = QFrame()
-        card.setObjectName(q.CLOUD_CARD)
+        self.host.style_chat_widget(card, "cloud_card")
         inner = QVBoxLayout(card)
         inner.setContentsMargins(14, 14, 14, 14)
         inner.setSpacing(8)
         head = QHBoxLayout()
-        head.addWidget(IconLabel("cloud", 20))
+        head.addWidget(self.host.IconLabel("cloud", 20))
         self.setup_title = QLabel()
-        self.setup_title.setObjectName(q.ASSISTANT_TITLE)
+        self.host.style_chat_widget(self.setup_title, "title")
         head.addWidget(self.setup_title, 1)
         inner.addLayout(head)
         self.setup_text = QLabel()
@@ -117,7 +102,7 @@ class ClaudeCodeView(Surface):
         self.setup_steps.setWordWrap(True)
         self.setup_steps.setOpenExternalLinks(True)
         inner.addWidget(self.setup_steps)
-        self.setup_button = Button("", "cloud", compact=True)
+        self.setup_button = self.host.Button("", "cloud", compact=True)
         self.setup_button.clicked.connect(self.sign_in)
         inner.addWidget(self.setup_button, 0, Qt.AlignmentFlag.AlignLeft)
         box.addWidget(card)
@@ -140,15 +125,15 @@ class ClaudeCodeView(Surface):
     def _build_status_row(self) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
-        self.status = Chip("Starting…", "muted")
+        self.status = self.host.Chip("Starting…", "muted")
         row.addWidget(self.status)
         row.addStretch(1)
-        self.attach_button = IconButton("attach_file", "Attach a paper (PDF), a figure or another file: "
+        self.attach_button = self.host.IconButton("attach_file", "Attach a paper (PDF), a figure or another file: "
                                                        "Claude Code gets its @path at the prompt")
         self.attach_button.clicked.connect(self._pick_files)
         self.attach_button.setEnabled(False)
         row.addWidget(self.attach_button)
-        self.restart_button = Button("Restart", "ghost", compact=True)
+        self.restart_button = self.host.Button("Restart", "ghost", compact=True)
         self.restart_button.setToolTip("End Claude Code and start it again in this project (the conversation "
                                        "can be continued with /resume).")
         self.restart_button.clicked.connect(lambda: self.restart())     # a new conversation
@@ -157,7 +142,7 @@ class ClaudeCodeView(Surface):
 
     def refresh_caption(self) -> None:
         """What the header's task buttons run on: the model of the Claude Code route for fixes (AI setup)."""
-        route = ai_profile.route_for(self.state.project, ai_profile.CLAUDE_CODE, ai_profile.FIXES)
+        route = self._surface_context.selected_route("claude_code", "fixes_notes_transcripts")
         self.caption.setText("Permissions are handled in Claude Code. Conversation model: set in Claude Code. "
                              f"Task buttons: {route.label.removeprefix('Claude Code · ')} "
                              '(<a href="setup">AI setup</a>).')
@@ -168,23 +153,22 @@ class ClaudeCodeView(Surface):
 
     def _switch_to_deck(self) -> str:
         """The terminal's switch_to_deck_mode, which the user has allowed (GUI thread)."""
-        if self.state.deck is None:
+        if not self._surface_context.set_scope("deck"):
             return "No deck is open in SlideMage: ask the user to open one."
-        self.scope.set_current(DECK)
-        self.scope.changed.emit(DECK)           # set_current is no click: tell the session and the header
         return "SlideMage is in Deck Mode now: go on with the request."
 
     # -- attachments ------------------------------------------------------------------------------
 
     def _pick_files(self) -> None:
-        names, _filter = QFileDialog.getOpenFileNames(self, "Attach files", str(self.state.project.root))
+        root = self._surface_context.project_root
+        names, _filter = QFileDialog.getOpenFileNames(self, "Attach files", str(root))
         self.attach_files(names)
 
     def attach_files(self, names: list[str]) -> None:
         """Place the files in the project (see attachments.py) and type their @paths at the prompt."""
         for name in names:
             try:
-                rel = place_file(self.state.project, name, dash_spaces=True)
+                rel = self._surface_context.attach_file(Path(name))
             except OSError as exc:
                 self.notice.emit(f"{Path(name).name} could not be attached: {exc.strerror or exc}", "error")
                 continue
@@ -192,7 +176,7 @@ class ClaudeCodeView(Surface):
                 self._mention(rel)
 
     def attach_image(self, image) -> None:
-        rel = save_image(self.state.project, image)
+        rel = self._surface_context.attach_image(image)
         if rel:
             self._mention(rel)
         else:
@@ -251,16 +235,7 @@ class ClaudeCodeView(Surface):
 
     def _translate_slide(self, path: Path) -> str:
         """The terminal's translate_slide: the slide into view, then its Translate bubble (GUI thread)."""
-        self.session.workspace.show_slide(path)
-        bubble = next((b for b in bubbles(self.app) if b.task is claude_tasks.TRANSLATE), None)
-        if bubble is None:
-            return f"{path.name} has a translation already, or is not EN or DE: there is nothing to translate."
-        if self.tasks.occupied:
-            return "SlideMage is busy with another task; ask the user to try again when its card is done."
-        if reason := self.tasks.refusal(bubble.task):
-            return reason
-        self.tasks.start(bubble.task, bubble.paths, bubble.label)
-        return f"SlideMage is translating it ({bubble.label}); the task card in the assistant shows the proposed slide."
+        return self._surface_context.translate_slide(path)
 
     # -- starting and stopping --------------------------------------------------------------------
 
@@ -277,19 +252,22 @@ class ClaudeCodeView(Surface):
 
     def _open(self) -> None:
         """Show the card that says what is missing, or build the terminal (once) and start Claude Code in it."""
-        self._claude = claude_launch.find_claude()
+        self._claude = self._launch.find_claude()
         if self._claude is None:
-            self._show_setup(*NOT_INSTALLED)
-        elif self.terminal is None and self._checking is None:
+            steps = (f'Install it as the <a href="{self._launch.INSTALL_URL}">Claude Code setup guide</a> says, '
+                     "start <b>claude</b> once in a terminal to sign in, then come back and check again.")
+            self._show_setup("Claude Code is not installed", f"{INSTALL_TEXT} {NEVER_SENT} until it is.",
+                             steps, "Check again")
+        elif self.terminal is None and not self._checking:
             self._stack.setCurrentIndex(TERMINAL)
             self.setup_changed.emit()
             self._checking = True
-            self.host.run_in_background(lambda: claude_launch.signed_in(self._claude),
-                                        lambda answer, error: self._on_signed_in(answer if error is None else None))
+            self.host.run_in_background(lambda: self._launch.signed_in(self._claude),
+                                        lambda result, error: self._on_signed_in(result if error is None else None))
 
     def _on_signed_in(self, signed_in) -> None:
         """`claude auth status` answered: the terminal, unless Claude Code says it is signed out."""
-        self._checking = None
+        self._checking = False
         if self._closed:
             return
         if signed_in is False:
@@ -308,17 +286,25 @@ class ClaudeCodeView(Surface):
 
     def _build_terminal(self, claude: Path) -> None:
         # Imported here: the web engine is heavy, and most sessions never open this view.
-        from claude.code.terminal.session import ClaudeCodeSession
+        from .session import ClaudeCodeSession
 
-        if self.session is not None:
+        if self.terminal is not None:
             return
-        self.session = ClaudeCodeSession(self.host, self.state.project, claude, on_change=self._on_change,
-                                         workspace=self.workspace, parent=self)
+        self.session = ClaudeCodeSession(self.host, self._surface_context, claude, self._launch, self._scope, self._server, self._hook_command, self)
         self.setup_changed.emit()
-        self.session.scope = self.scope.current()
-        self.session.workspace.translate = self._translate_slide
-        self.session.workspace.widen = self._switch_to_deck
+        self.session.scope = self._surface_context.scope()
+        self.terminal = self.host.terminal().create_widget()
+        self._terminal_layout.insertWidget(1, self.terminal, 1)
+        self.terminal.ready.connect(self._on_ready)
+        self.terminal.resized.connect(self._on_resized)
+        self.terminal.input_data.connect(self.session.write)
+        self.terminal.files_dropped.connect(self.attach_files)
+        self.terminal.image_pasted.connect(self.attach_image)
+        self.session.output.connect(self.terminal.write)
         self.session.exited.connect(self._on_exited)
+
+    def _on_ready(self, cols: int, rows: int) -> None:
+        self._size = (cols, rows)
         self._spawn()
 
     def _on_resized(self, cols: int, rows: int) -> None:
@@ -327,27 +313,18 @@ class ClaudeCodeView(Surface):
             self.session.resize(cols, rows)
 
     def _spawn(self, resume: bool = False) -> None:
-        old = self.terminal
         try:
-            route = ai_profile.route_for(self.state.project, ai_profile.CLAUDE_CODE, ai_profile.CHAT)
             choice = getattr(self, "_next_choice", None)
             self._next_choice = None
-            self.session.choice = choice if choice is not None else (f"{route.model}:{route.effort}" if route.model else "")
-            self.session.start(*self._size, resume=resume)
-            self.terminal = self.session.widget
-            if old is not None:
-                self._terminal_layout.removeWidget(old)
-                old.setParent(None)
-                old.deleteLater()
-            self._terminal_layout.insertWidget(1, self.terminal, 1)
-            self.terminal.files_dropped.connect(self.attach_files)
-            self.terminal.image_pasted.connect(self.attach_image)
-            self.terminal.ready.connect(lambda *_: self._set_attachable())
-            self.terminal.resized.connect(self._on_resized)
+            if choice is None:
+                self.session.start(*self._size, resume=resume)
+            else:
+                self.session.start(*self._size, resume=resume, choice=choice)
         except Exception as exc:  # noqa: BLE001 -- the MCP server could not bind, the program could not start
             self.status.set_text("Could not start")
             self.status.set_tone("error")
-            self.notice.emit(f"Claude Code could not be started: {exc}. Use Restart to try again.", "error")
+            self.terminal.write(f"\r\n\x1b[31m[Claude Code could not be started: {exc}. "
+                                "Use Restart to try again.]\x1b[0m\r\n".encode("utf-8", "replace"))
             return
         self.status.set_text("Running")
         self.status.set_tone("ok")
@@ -355,7 +332,7 @@ class ClaudeCodeView(Surface):
         self.terminal.focus_terminal()
 
     def restart(self, choice: str | None = None, continue_conversation: bool = False, *, resume: bool = False) -> None:
-        """Restart with the selected model, optionally keeping the conversation and draft."""
+        """Restart on the saved choice, optionally preserving the conversation and pending input."""
         if choice is not None:
             self._next_choice = choice
         if continue_conversation:
@@ -363,8 +340,7 @@ class ClaudeCodeView(Surface):
             return
         if self.session is not None:
             self.session.stop()
-            if self.terminal is not None:
-                self.terminal.reset()
+            self.terminal.reset()
             self._set_attachable()
             self._spawn(resume)
 
@@ -398,19 +374,18 @@ class ClaudeCodeView(Surface):
 
     def refresh_colors(self) -> None:
         palette = self.caption.palette()           # the caption's link: QSS cannot color it
-        palette.setColor(QPalette.ColorRole.Link, QColor(self.app.theme.tokens.info))
+        palette.setColor(QPalette.ColorRole.Link, QColor(self.host.theme_color("info")))
         self.caption.setPalette(palette)
         if self.terminal is not None:
-            self.terminal.set_tokens(self.app.theme.tokens)
+            self.host.terminal().refresh_widget(self.terminal)
 
     def shutdown(self) -> None:
         """End the process, the MCP server and the terminal page (window close, project switch, app quit)."""
         self._closed = True
+        self._surface_context.close()
         if self.session is not None:
             self.session.shutdown()
         if self.terminal is not None:
-            self._terminal_layout.removeWidget(self.terminal)
-            self.terminal.deleteLater()
-        self.terminal = None
-        self.session = None
-        self.workspace.close()
+            self.terminal.shutdown()
+            self.terminal = None
+            self.session = None
