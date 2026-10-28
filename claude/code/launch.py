@@ -18,8 +18,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from slidemage.cli import CLAUDE_HOOK_FLAG
-from slidemage.processes import no_console_kwargs
+from claude._processes import no_console_kwargs
+from claude.host import Host
 from claude.code.scope import FOCUS_ENV
 from slidemage.ai.image_instructions import IMAGE_DESCRIPTION_RULES
 from slidemage.ai.tools import CLAUDE_CODE_PRE_APPROVED
@@ -91,13 +91,9 @@ def signed_in(claude: Path) -> bool | None:
     return logged if isinstance(logged, bool) else None
 
 
-def hook_command() -> str:
-    """The shell command Claude Code runs for the hook: this very program, so that it finds the same
-    SlideMage (the frozen build has no `python -m`, its executable takes CLAUDE_HOOK_FLAG)."""
-    if getattr(sys, "frozen", False):
-        argv = [sys.executable, CLAUDE_HOOK_FLAG]
-    else:
-        argv = [sys.executable, "-m", "slidemage.ai.claude_hook"]
+def hook_command(host: Host) -> str:
+    """Quote the host-supplied argv; core owns source/frozen entry-point dispatch."""
+    argv = host.entry_point_command("hook")
     return subprocess.list2cmdline(argv) if sys.platform == "win32" else shlex.join(argv)
 
 
@@ -116,17 +112,25 @@ def settings(hook: str) -> dict:
         "permissions": {"allow": [f"mcp__{SERVER_NAME}__{t.spec.name}" for t in CLAUDE_CODE_PRE_APPROVED]}}
 
 
+def _require_host(host: Host | None) -> Host:
+    if host is None:
+        raise RuntimeError("Claude Code needs a host entry point (or an explicit hook command)")
+    return host
+
+
 def build_command(claude: Path, url: str, hook: str | None = None, *,
-                  model: str = "", effort: str | None = None, session_id: str = "", resume: bool = False) -> list[str]:
+                  host: Host | None = None, model: str = "", effort: str | None = None,
+                  session_id: str = "", resume: bool = False) -> list[str]:
     """Start with the saved chat choice, or inherit Claude Code's defaults when no choice is saved. `session_id`
     names the conversation (--session-id), or with `resume` continues it (--resume): --model and --effort apply to
     this session only, so a new default reaches a running conversation this way without becoming Claude Code's own
     default, as /model would make it."""
+    command = hook if hook is not None else hook_command(_require_host(host))
     session = (["--resume", session_id] if resume else ["--session-id", session_id]) if session_id else []
     return [str(claude), *session, *(["--model", model] if model else []),
             *(["--effort", effort] if effort else []),
             "--mcp-config", json.dumps(mcp_config(url)),
-            "--settings", json.dumps(settings(hook or hook_command())),
+            "--settings", json.dumps(settings(command)),
             "--append-system-prompt", ORIENTATION]
 
 
@@ -171,15 +175,13 @@ def clean_environment(claude: Path, base: dict[str, str] | None = None) -> dict[
 
 def environment(token: str, project: Path, claude: Path, base: dict[str, str] | None = None,
                 focus_file: Path | None = None) -> dict[str, str]:
-    """The terminal's environment: `clean_environment`, a terminal that does colour, the token, the project for
-    the hook, and this SlideMage on PYTHONPATH for the hook."""
+    """The terminal's environment: a clean login, colour, the token and the hook's project/focus.
+
+    The host owns entry-point dispatch. Preserve its inherited PYTHONPATH without guessing a source tree.
+    """
     env = clean_environment(claude, base)
     env.update({"TERM": "xterm-256color", "COLORTERM": "truecolor", TOKEN_ENV: token,
                 "SLIDEMASTER_PROJECT": str(project)})
     if focus_file is not None:
         env[FOCUS_ENV] = str(focus_file)
-    if not getattr(sys, "frozen", False):
-        # `python -m slidemage.ai.claude_hook` must import this very SlideMage, also when it runs from a source
-        # tree that is not installed (a hook that fails to start is a warning, so it would let every edit through).
-        env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(Path(__file__).resolve().parents[2]), env.get("PYTHONPATH")]))
     return env

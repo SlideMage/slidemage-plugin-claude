@@ -134,12 +134,12 @@ def test_main_never_blocks_because_of_its_own_trouble(monkeypatch, capsys):
 
 
 @pytest.mark.parametrize("argv, tool, name, arguments, reason", [
-    (["-m", "slidemage.ai.claude_hook"], "Edit", CURRENT,
+    (["-m", "claude.code.hook"], "Edit", CURRENT,
      {"old_string": "\\setSlideVersion{1-0-0}", "new_string": ""}, b"protected part"),
-    (["-m", "slidemage", "--claude-hook"], "Write", FROZEN, {"content": "x"}, b"frozen version"),
-], ids=["module-command", "frozen-build-flag"])
+    (["-m", "claude.code.hook"], "Write", FROZEN, {"content": "x"}, b"frozen version"),
+], ids=["plugin-edit", "plugin-write"])
 def test_the_command_as_claude_code_runs_it(tmp_path, argv, tool, name, arguments, reason):
-    """Both source and frozen-build entry points block edits in a real process without a window."""
+    """The plugin hook blocks edits in a real process without a window (dispatch awaits 3a/3c)."""
     project = make_project_in(tmp_path)
     payload = json.dumps({"cwd": str(project), "tool_name": tool, "tool_input": {
         "file_path": str(project / "slides" / name), **arguments}})
@@ -169,7 +169,7 @@ def test_a_slide_that_cannot_be_read_is_refused_not_waved_through(ctx, root):
 
 def test_the_hook_does_not_import_the_heavy_packages():
     """Each hook is a fresh process: it must start without the tools package, the compiler, PDF code or Qt."""
-    code = ("import sys, slidemage.ai.claude_hook; "
+    code = ("import sys, claude.code.hook; "
             "print([m for m in sys.modules if m.split('.')[0] in ('fitz', 'pymupdf', 'PySide6') "
             "or m.startswith(('slidemage.ai.tools', 'slidemage.compiler', 'slidemage.preview_build', 'slidemage.slide_preview'))])")
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=60)

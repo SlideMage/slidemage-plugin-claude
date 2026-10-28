@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from slidemage.processes import no_console_kwargs
+from claude._processes import no_console_kwargs
 from slidemage.project import ProjectContext
 from slidemage.ai import claude_tasks, translation_style
 from claude.code.launch import clean_environment

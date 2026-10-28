@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Stefan Palan, Jürgen Fleiß
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""The Claude Code body of the assistant card (assistant.py), shown while the route is Cloud · Claude Code: the
+"""DRAFT 3b: retained setup/cards/attachments view; core does not construct it yet.
+
+The Claude Code body of the assistant card (assistant.py), shown while the route is Cloud · Claude Code: the
 user's own `claude`, running in a terminal in the project folder, connected to SlideMage (session.py).
 
 Two bodies. No `claude` found, or not signed in (`claude auth status`): an amber card says so, with "Check again"
@@ -19,14 +21,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QCoreApplication, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPalette, QShowEvent
 from PySide6.QtWidgets import QFileDialog, QFrame, QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout
 
 from slidemage.ai import ai_profile, claude_tasks
 from claude.code import launch as claude_launch
 from claude.code.scope import DECK
-from slidemage.ui import background
+from claude.host import Host
 from slidemage.ui.kit import kit_qss as q
 from slidemage.ui.kit.widgets import Button, Chip, IconButton, IconLabel, SegmentedControl, Surface, caption
 from slidemage.ui.workspace.attachments import place_file, save_image
@@ -48,26 +50,15 @@ NOT_INSTALLED = ("Claude Code is not installed", f"{INSTALL_TEXT} {NEVER_SENT} u
 NOT_SIGNED_IN = ("Claude Code is not signed in", f"{NEVER_SENT} until you sign in.", "", "Sign in…")
 
 
-class _SignedIn(QThread):
-    """Asks `claude auth status`, off the GUI thread."""
-
-    answer = Signal(object)         # True, False, or None when Claude Code cannot say
-
-    def __init__(self, claude: Path) -> None:
-        super().__init__()
-        self.claude = claude
-
-    def run(self) -> None:
-        self.answer.emit(claude_launch.signed_in(self.claude))
-
-
 class ClaudeCodeView(Surface):
     notice = Signal(str, str)       # a line for the assistant's task row: its text and tone
     setup_changed = Signal()        # the amber card came up or went (the task buttons wait for it)
 
-    def __init__(self, app, state: WorkspaceState, scope: SegmentedControl, tasks: TaskRunner) -> None:
+    def __init__(self, app, state: WorkspaceState, scope: SegmentedControl, tasks: TaskRunner, *,
+                 host: Host, on_change, workspace) -> None:
         """`scope` is the assistant header's; `tasks` its runner, which the terminal's translate tool asks."""
         super().__init__()
+        self.host, self._on_change, self.workspace = host, on_change, workspace
         self.app = app
         self.state = state
         self.scope = scope
@@ -77,7 +68,7 @@ class ClaudeCodeView(Surface):
         self._started = False
         self._closed = False
         self._restart_on_show = False             # the route left and came back: a new session
-        self._checking: _SignedIn | None = None
+        self._checking = None
         self._claude: Path | None = None
         self._size = (80, 24)
         scope.changed.connect(self._on_scope)
@@ -292,9 +283,9 @@ class ClaudeCodeView(Surface):
         elif self.terminal is None and self._checking is None:
             self._stack.setCurrentIndex(TERMINAL)
             self.setup_changed.emit()
-            self._checking = checking = _SignedIn(self._claude)
-            checking.answer.connect(self._on_signed_in)
-            background.start_detached(checking)
+            self._checking = True
+            self.host.run_in_background(lambda: claude_launch.signed_in(self._claude),
+                                        lambda answer, error: self._on_signed_in(answer if error is None else None))
 
     def _on_signed_in(self, signed_in) -> None:
         """`claude auth status` answered: the terminal, unless Claude Code says it is signed out."""
@@ -318,27 +309,16 @@ class ClaudeCodeView(Surface):
     def _build_terminal(self, claude: Path) -> None:
         # Imported here: the web engine is heavy, and most sessions never open this view.
         from claude.code.terminal.session import ClaudeCodeSession
-        from slidemage.ui.workspace.terminal.web import TerminalWidget
 
-        if self.terminal is not None:
+        if self.session is not None:
             return
-        self.session = ClaudeCodeSession(self.app, claude, self)
+        self.session = ClaudeCodeSession(self.host, self.state.project, claude, on_change=self._on_change,
+                                         workspace=self.workspace, parent=self)
         self.setup_changed.emit()
         self.session.scope = self.scope.current()
-        self.terminal = TerminalWidget(self.app.theme.tokens)
-        self._terminal_layout.insertWidget(1, self.terminal, 1)
         self.session.workspace.translate = self._translate_slide
         self.session.workspace.widen = self._switch_to_deck
-        self.terminal.ready.connect(self._on_ready)
-        self.terminal.resized.connect(self._on_resized)
-        self.terminal.input_data.connect(self.session.write)
-        self.terminal.files_dropped.connect(self.attach_files)
-        self.terminal.image_pasted.connect(self.attach_image)
-        self.session.output.connect(self.terminal.write)
         self.session.exited.connect(self._on_exited)
-
-    def _on_ready(self, cols: int, rows: int) -> None:
-        self._size = (cols, rows)
         self._spawn()
 
     def _on_resized(self, cols: int, rows: int) -> None:
@@ -347,13 +327,25 @@ class ClaudeCodeView(Surface):
             self.session.resize(cols, rows)
 
     def _spawn(self, resume: bool = False) -> None:
+        old = self.terminal
         try:
+            route = ai_profile.route_for(self.state.project, ai_profile.CLAUDE_CODE, ai_profile.CHAT)
+            self.session.choice = f"{route.model}:{route.effort}" if route.model else ""
             self.session.start(*self._size, resume=resume)
+            self.terminal = self.session.widget
+            if old is not None:
+                self._terminal_layout.removeWidget(old)
+                old.setParent(None)
+                old.deleteLater()
+            self._terminal_layout.insertWidget(1, self.terminal, 1)
+            self.terminal.files_dropped.connect(self.attach_files)
+            self.terminal.image_pasted.connect(self.attach_image)
+            self.terminal.ready.connect(lambda *_: self._set_attachable())
+            self.terminal.resized.connect(self._on_resized)
         except Exception as exc:  # noqa: BLE001 -- the MCP server could not bind, the program could not start
             self.status.set_text("Could not start")
             self.status.set_tone("error")
-            self.terminal.write(f"\r\n\x1b[31m[Claude Code could not be started: {exc}. "
-                                "Use Restart to try again.]\x1b[0m\r\n".encode("utf-8", "replace"))
+            self.notice.emit(f"Claude Code could not be started: {exc}. Use Restart to try again.", "error")
             return
         self.status.set_text("Running")
         self.status.set_tone("ok")
@@ -406,6 +398,7 @@ class ClaudeCodeView(Surface):
         if self.session is not None:
             self.session.shutdown()
         if self.terminal is not None:
-            self.terminal.shutdown()
-            self.terminal = None
-            self.session = None
+            self._terminal_layout.removeWidget(self.terminal)
+            self.terminal.deleteLater()
+        self.terminal = None
+        self.session = None

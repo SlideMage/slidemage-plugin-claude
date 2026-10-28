@@ -61,11 +61,10 @@ def test_failed_focus_publish_is_retried_without_a_focus_change(qapp, tmp_path, 
     from slidemage.project import ProjectContext
     from claude.code.terminal.session import ClaudeCodeSession
 
-    window = SimpleNamespace(
-        project=ProjectContext.at(tmp_path),
-        state=SimpleNamespace(deck=None, focused_slide="abc", view="instructor", language="EN"),
-        centre=SimpleNamespace(path=tmp_path / "slides/abc-EN-Hello-current.tex", is_dirty=lambda path: False))
-    session = ClaudeCodeSession(window, tmp_path / "fake-claude")
+    from fake_host import FakeHost
+    host = FakeHost(tmp_path)
+    host.current_focus = SimpleNamespace(deck=None, scope="slide", slide=tmp_path / "slides/abc-EN-Hello-current.tex")
+    session = ClaudeCodeSession(host, ProjectContext.at(tmp_path), tmp_path / "fake-claude", on_change=lambda _: None)
     session._focus_file = tmp_path / "focus.json"
     changed, attempts = [], []
     session.focus_changed.connect(lambda: changed.append(True))
@@ -83,7 +82,7 @@ def test_failed_focus_publish_is_retried_without_a_focus_change(qapp, tmp_path, 
         assert session._published is None and not changed and not session._focus_file.exists()
         session.publish_focus()
         assert session._published is not None and changed == [True] and len(attempts) == 2
-        assert claude_scope.load(session._focus_file)["slide_id"] == "abc"
+        assert claude_scope.load(session._focus_file)["slide"] == "slides/abc-EN-Hello-current.tex"
         session.publish_focus()
         assert len(attempts) == 2 and changed == [True]
     finally:
@@ -110,37 +109,25 @@ def test_a_restart_resumes_the_conversation_only_when_claude_code_saved_it(qapp,
         def stop(self):
             pass
 
-    class FakePty:
-        alive = True
-
-        def __init__(self, command, *_args):
-            started.append(command)
-
-        def stop(self):
-            pass
-
+    from fake_host import FakeHost
+    host = FakeHost(tmp_path)
     monkeypatch.setattr(session_mod, "McpServer", FakeServer)
-    monkeypatch.setattr(session_mod, "PtyProcess", FakePty)
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "config"))
-    window = SimpleNamespace(
-        project=ProjectContext.at(tmp_path),
-        state=SimpleNamespace(deck=None, focused_slide=None, view="instructor", language="EN"),
-        centre=SimpleNamespace(path=None, is_dirty=lambda path: False))
-    session = session_mod.ClaudeCodeSession(window, tmp_path / "fake-claude")
-    session._sync = SimpleNamespace(start=lambda: None, stop=lambda last_look=True: None)
+    session = session_mod.ClaudeCodeSession(host, ProjectContext.at(tmp_path), tmp_path / "fake-claude",
+                                           on_change=lambda _: None)
     try:
         session.start(80, 24)
         first = session.session_id
-        assert started[-1][1:3] == ["--session-id", first]
+        assert host.terminals[-1].argv[1:3] == ["--session-id", first]
         session.start(80, 24, resume=True)                     # nothing was sent yet: no transcript to resume
-        assert session.session_id != first and started[-1][1:3] == ["--session-id", session.session_id]
+        assert session.session_id != first and host.terminals[-1].argv[1:3] == ["--session-id", session.session_id]
         transcript = tmp_path / "config" / "projects" / "proj" / f"{session.session_id}.jsonl"
         transcript.parent.mkdir(parents=True)
         transcript.write_text("{}\n", encoding="utf-8")
         kept = session.session_id
         session.start(80, 24, resume=True)
-        assert session.session_id == kept and started[-1][1:3] == ["--resume", kept]
+        assert session.session_id == kept and host.terminals[-1].argv[1:3] == ["--resume", kept]
         session.start(80, 24)                                  # Restart: a new conversation
-        assert session.session_id != kept and started[-1][1] == "--session-id"
+        assert session.session_id != kept and host.terminals[-1].argv[1] == "--session-id"
     finally:
         session.shutdown()

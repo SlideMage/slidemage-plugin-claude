@@ -4,8 +4,7 @@
 step 10c). Claude Code runs this command before every Edit, Write or MultiEdit, with the call as JSON on
 stdin; exit code 2 blocks the call and hands stderr to Claude as the reason, any other code lets it go.
 
-    python -m slidemage.ai.claude_hook        (from a source checkout / installed package)
-    SlideMage --claude-hook                   (the PyInstaller build; cli.main handles the flag)
+    SlideMage --plugin claude:hook           (argv supplied by host.entry_point_command)
 
 The rules are the chat tools' (tools/edits.py): an edit that changes a slide's protected parts (header
 comment, \\setSlideVersion, \\vbox to 0pt{...} blocks) is refused, and a frozen version (-vX-Y-Z.tex) is read-only.
@@ -23,7 +22,8 @@ from hashlib import sha256
 from slidemage import ai_review, alt_images, fileio, project, timing
 from slidemage.project import ProjectContext
 from claude.code import scope as claude_scope
-from slidemage.slide_protection import protected_problem, slide_kind
+from slidemage.slide_protection import slide_kind  # DRAFT: classification waits for 3a.
+from slidemage.plugin_api import protected_spans
 
 BLOCK = 2
 FROZEN_MESSAGE = ("{name} is a frozen version of a slide: a historical record, read-only. "
@@ -31,6 +31,22 @@ FROZEN_MESSAGE = ("{name} is a frozen version of a slide: a historical record, r
 UNREADABLE_MESSAGE = ("{name} cannot be read as UTF-8 text, so SlideMage cannot check that the edit leaves the "
                       "slide's protected parts alone. Ask the user to look at the file.")
 FILE_TOOLS = ("Edit", "Write", "MultiEdit")
+
+
+# Same user-facing guard as core slide_protection; only the public span reader is needed.
+PROTECTED_MESSAGE = (
+    "That edit would change a protected part of the slide: the comment block at the top of the file, "
+    "the \\setSlideVersion line, or a \\vbox to 0pt{...} overlay block. SlideMage manages those; leave "
+    "them as they are and change only the rest of the slide.")
+
+
+def protected_problem(before: str, after: str) -> str | None:
+    def parts(text: str):
+        spans = protected_spans(text)
+        first = spans[0][0] if spans else None
+        starts = first is not None and text[:first].lstrip("\ufeff") == ""
+        return [text[start:end] for start, end in spans], starts
+    return None if parts(before) == parts(after) else PROTECTED_MESSAGE
 
 
 def _read(path: Path) -> str | None:
@@ -136,7 +152,7 @@ def record_write(ctx: ProjectContext, event: dict) -> None:
         ai_review.inserted_slides(ctx, path, saved["before"] or "", fileio.read_text_exact(path), source)
 
 
-def main() -> int:
+def main(args: list[str] | None = None) -> int:
     try:
         event = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace"))
         if isinstance(event, dict) and event.get("hook_event_name") == "UserPromptSubmit":

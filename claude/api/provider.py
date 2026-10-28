@@ -4,7 +4,7 @@
 (2026-10-27, plugins plan phase 4; before this the official ``anthropic``
 SDK, which brought pydantic and httpx with it and took a second to import).
 
-Like Ollama's, the connection is ``http.client`` (providers._HttpProvider),
+The connection is ``http.client`` (our private copy of _HttpProvider),
 so that abort() can end a running request from another thread by shutting
 its socket. Every request streams (``stream: true``), chat() too: a long
 answer then never sits behind one blocked read the user cannot interrupt.
@@ -35,19 +35,20 @@ import urllib.parse
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
-from slidemage.project import ProjectContext
+from typing import Any
+
 from claude import credentials
-from slidemage.ai.agent_types import AgentMessage, AssistantMessage, ToolCall, ToolResultsMessage, ToolSpec
-from slidemage.ai.providers import (
-    DEFAULT_ANTHROPIC_MODEL,
-    Cancelled,
-    ChatReply,
-    Message,
-    ProviderError,
-    _error_detail,
-    _HttpProvider,
-    _image_media_type,
+from slidemage.plugin_api import (
+    AgentMessage, AssistantMessage, ToolCall, ToolResultsMessage, ToolSpec,
+    Cancelled, ChatReply, ProviderError,
 )
+from claude.api._http import _HttpProvider, _error_detail, _image_media_type
+
+# Provider-specific defaults and message alias are not exported by plugin_api.
+DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5-5"
+ANTHROPIC_FALLBACK_MODELS = (
+    DEFAULT_ANTHROPIC_MODEL, "claude-opus-5-5", "claude-haiku-4-5-20251001")
+Message = dict[str, str]
 
 API_VERSION = "2023-06-01"
 _RETRY_STATUSES = frozenset({408, 409, 429}) | frozenset(range(500, 600))
@@ -181,8 +182,8 @@ class AnthropicProvider(_HttpProvider):
         self._wake = threading.Event()      # set by abort(): ends a backoff wait at once
 
     @classmethod
-    def for_project(cls, ctx: ProjectContext, model: str = "") -> "AnthropicProvider":
-        """With the key the environment, the keychain or the project's settings holds now."""
+    def for_project(cls, ctx: Any, model: str = "") -> "AnthropicProvider":
+        """Compatibility for older callers; the registered route uses its host credentials handle."""
         stored = credentials.get_api_key(ctx)
         return cls(model or DEFAULT_ANTHROPIC_MODEL, stored.value if stored else "")
 

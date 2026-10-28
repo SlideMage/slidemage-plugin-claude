@@ -23,8 +23,7 @@ import threading
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from slidemage.ai.agent_types import ToolCall
-from slidemage.ai.tools.base import ToolBox
+from slidemage.plugin_api import ToolCall, ToolBox
 
 PATH = "/mcp"
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")     # newest first
