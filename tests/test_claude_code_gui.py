@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 from functools import partial
+from pathlib import Path
 
 import pytest
 from conftest import SLIDE_TEXT, build_window, make_project, wait_until as _wait_until
@@ -484,7 +485,14 @@ def test_saved_chat_choice_applies_on_start_and_restart(env):
 def test_mcp_toolbox_reads_scope_and_focus_on_gui_thread(env):
     from claude.code import scope as claude_scope
 
-    session = session_module.ClaudeCodeSession(env.window, env.fake)
+    from slidemage.plugins.host import PluginHost
+    from slidemage.plugins.manifest import read_manifest
+    from slidemage.ui.workspace.chat.gui_workspace import GuiWorkspace
+
+    host = PluginHost(read_manifest(Path(__file__).resolve().parents[1]), env.window.project)
+    workspace = GuiWorkspace(env.window)
+    session = session_module.ClaudeCodeSession(host, env.window.project, env.fake,
+                                               on_change=lambda _: None, workspace=workspace)
     try:
         env.window.open_slide_editor(env.path)
         box = on_thread(session._toolbox)
@@ -493,4 +501,5 @@ def test_mcp_toolbox_reads_scope_and_focus_on_gui_thread(env):
         box = on_thread(session._toolbox)
         assert box.ctx.scope == claude_scope.DECK and box.ctx.focus_slide == env.path
     finally:
+        workspace.close()
         session.shutdown()
