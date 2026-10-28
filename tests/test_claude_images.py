@@ -161,14 +161,26 @@ def test_a_translation_batch_counts_what_failed(ctx, root, claude, monkeypatch):
 
 
 def test_route_context_uses_the_project_image_prompt(ctx, root, claude, monkeypatch):
-    from types import SimpleNamespace
     from slidemage import draft_prompts
+    from slidemage.ai.routes import context
     slide = add_pictures(monkeypatch, root, chart={})
     draft_prompts.set_custom_prompt(ctx, draft_prompts.KIND_IMAGE_DRAFT, "Project image instructions")
     claude.script({"answer": ANSWER})
-    route_ctx = SimpleNamespace(root=root, de_address="Sie", glossary="")
+    route_ctx = context(ctx, "claude")
     result = claude_images.ClaudeDraftBackend(route_ctx, claude.path).draft(
         root / "media" / "chart.png", alt_draft.build_context(ctx, slide, "media/chart.png"))
     assert result.ok
     flags = claude.calls()[0]["argv"]
     assert flags[flags.index("--system-prompt") + 1] == "Project image instructions"
+
+
+def test_route_context_uses_the_project_translation_prompt(ctx, root, claude, monkeypatch):
+    from slidemage.ai.routes import context
+    add_pictures(monkeypatch, root, chart=dict(short="A chart."))
+    translation_prompts.set_prompt(ctx, "sonnet", "en", "de",
+                                   translation_prompts.PromptConfig(prompt="Project translation instructions"))
+    claude.script({"answer": GERMAN})
+    backend = claude_images.ClaudeTranslationBackend(context(ctx, "claude"), claude.path, "sonnet")
+    assert backend.translate(alt_images.load_store(ctx)["media/chart.png"]).ok
+    flags = claude.calls()[0]["argv"]
+    assert flags[flags.index("--system-prompt") + 1] == "Project translation instructions"

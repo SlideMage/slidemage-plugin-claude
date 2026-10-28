@@ -1,5 +1,5 @@
 [tool.pytest.ini_options]
 # The plugin package imports from the repository's root; the tests import each other's fixtures.
-# The tests use the ai-routes worktree and its test support (see docs/Handover.md).
+# The tests use the ai-free-core worktree and its test support (see docs/Handover.md).
 pythonpath = [".", "tests"]
 testpaths = ["tests"]

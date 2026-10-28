@@ -27,7 +27,6 @@ from typing import Any
 import slidemage.plugin_api as claude_tasks
 from slidemage.plugin_api import Outcome
 from claude.code.launch import clean_environment
-from claude.code._project import project_for_helpers
 
 # The default of Claude Code tasks: Haiku at medium effort, tested by the user as good enough (2026-10-13;
 # docs/CLAUDE_CODE_TASKS_BENCHMARK.md measured Sonnet). A text task takes 2-10 s there (the slowest run 13 s),
@@ -194,7 +193,7 @@ def judge(ctx: Any, task: claude_tasks.Task, captured: str, answer: dict | None,
     changes nothing; the problems, when the answer is refused (then `outcome` says so, and they go into the repair
     request)."""
     outcome.note = claude_tasks.answer_note(task, answer)
-    text, problems = claude_tasks.check(project_for_helpers(ctx), task, captured, answer, span)
+    text, problems = claude_tasks.check(ctx, task, captured, answer, span)
     if problems:
         outcome.message = f"{who}'s answer was refused: " + "; ".join(problems)
     else:

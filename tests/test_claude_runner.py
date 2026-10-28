@@ -188,7 +188,17 @@ def test_limit_kind_tells_rate_limits_from_the_exhausted_usage(message, kind):
 
 
 def test_route_context_validates_task_answer(claude):
+    from slidemage.ai.routes import context
     claude.script({"answer": GOOD})
-    ctx = SimpleNamespace(root=claude.ctx.root, de_address="Sie", glossary="")
+    ctx = context(claude.ctx, "claude")
     outcome = claude_runner.run_task(ctx, claude.path, claude_tasks.TRANSLATE, LF, "request")
     assert outcome.status == DONE and outcome.text == GOOD["body"]
+
+
+def test_route_context_validation_uses_project_bibliography(claude):
+    from slidemage.ai.routes import context
+    claude.ctx.bibliography_path.write_text("@article{known2020, title={Known}}\n")
+    cited = LF.replace("First point", r"\cite{known2020}")
+    claude.script({"answer": {"body": cited.replace("known2020", "missing2020")}})
+    outcome = claude_runner.run_task(context(claude.ctx, "claude"), claude.path, claude_tasks.TRANSLATE, cited, "request")
+    assert outcome.status == FAILED and "citation" in outcome.message

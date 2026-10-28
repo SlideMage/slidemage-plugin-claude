@@ -132,13 +132,13 @@ def test_the_hook_command_quotes_the_host_argv_without_guessing_frozen_dispatch(
 
 
 def test_the_frozen_program_runs_the_hook_when_given_the_flag(monkeypatch):
+    from slidemage.plugins import entry
     called = []
-    monkeypatch.setattr("slidemage.ai.claude_hook.main", lambda: called.append(1) or 7)
-    try:
+    monkeypatch.setattr(entry, "run", lambda spec, args: called.append((spec, args)) or 7)
+    with pytest.raises(SystemExit) as exit_:
         cli.main([cli.CLAUDE_HOOK_FLAG])
-    except SystemExit as exit_:
-        assert exit_.code == 7
-    assert called == [1]
+    assert exit_.value.code == 7
+    assert called == [("claude:hook", [])]
 
 
 def test_building_the_launch_writes_nothing_anywhere(tmp_path, monkeypatch):
@@ -159,9 +159,13 @@ def test_building_the_launch_writes_nothing_anywhere(tmp_path, monkeypatch):
         "home", "home/.local", "home/.local/bin", "home/.local/bin/claude", "project"]
 
 
-def test_saved_chat_model_and_effort_are_passed_as_launch_flags(ctx, tmp_path):
-    from slidemage.ai import ai_profile
+def test_saved_chat_model_and_effort_are_passed_as_launch_flags(ctx, tmp_path, monkeypatch):
+    from slidemage.ai import ai_profile, routes
+    from claude.code.route import ClaudeCodeRoute
 
+    monkeypatch.setattr(routes, "_routes", {})
+    monkeypatch.setattr(routes, "_owners", {})
+    routes.register(ClaudeCodeRoute(FakeHost(tmp_path)))
     ai_profile.set_model_choice(ctx, ai_profile.CLAUDE_CODE, ai_profile.CHAT, "opus:high")
     route = ai_profile.route_for(ctx, ai_profile.CLAUDE_CODE, ai_profile.CHAT)
     command = claude_launch.build_command(tmp_path / "claude", URL, host=FakeHost(tmp_path), model=route.model, effort=route.effort)
