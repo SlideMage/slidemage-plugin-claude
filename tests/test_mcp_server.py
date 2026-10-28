@@ -15,7 +15,7 @@ from mcp_client import Client
 
 from slidemage import compiler, deck_editor, preview_target, slide_add, slide_snapshot
 from slidemage.ai.agent_types import EDIT_AUTO
-from slidemage.ai.mcp_server import PROTOCOL_VERSIONS, McpServer
+from claude.code.mcp_server import PROTOCOL_VERSIONS, McpServer
 from slidemage.ai.tools import CLAUDE_CODE_PRE_APPROVED, CLAUDE_CODE_TOOLS, build_toolbox
 from slidemage.ai.workspace import WorkspaceContext
 from slidemage.deck_scan import scan_decks

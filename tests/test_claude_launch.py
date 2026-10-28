@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from slidemage import cli
-from slidemage.ai import claude_launch, claude_scope
+from claude.code import launch as claude_launch, scope as claude_scope
 from slidemage.ai.tools import CLAUDE_CODE_PRE_APPROVED
 
 URL = "http://127.0.0.1:4711/mcp"

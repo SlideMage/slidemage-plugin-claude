@@ -14,7 +14,7 @@ import json
 import os
 from pathlib import Path
 
-from ..fileio import write_json
+from slidemage.fileio import write_json
 
 FOCUS_ENV = "SLIDEMAGE_FOCUS_FILE"
 SLIDE, DECK = "slide", "deck"

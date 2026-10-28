@@ -35,10 +35,10 @@ import urllib.parse
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
-from ..project import ProjectContext
-from . import credentials
-from .agent_types import AgentMessage, AssistantMessage, ToolCall, ToolResultsMessage, ToolSpec
-from .providers import (
+from slidemage.project import ProjectContext
+from claude import credentials
+from slidemage.ai.agent_types import AgentMessage, AssistantMessage, ToolCall, ToolResultsMessage, ToolSpec
+from slidemage.ai.providers import (
     DEFAULT_ANTHROPIC_MODEL,
     Cancelled,
     ChatReply,

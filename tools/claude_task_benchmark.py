@@ -113,7 +113,8 @@ def main(argv: list[str] | None = None) -> int:
     os.environ["SLIDEMASTER_LATEX"] = str(REPO / "latex")
 
     from slidemage import latex_lint, slide_ids, slide_source
-    from slidemage.ai import claude_launch, claude_runner, claude_tasks
+    from slidemage.ai import claude_tasks
+    from claude.code import launch as claude_launch, runner as claude_runner
     from slidemage.ai.workspace import Workspace
     from slidemage.project import ProjectContext
 
@@ -195,8 +196,9 @@ def run_ui(claude, work: Path, paths: dict[str, Path], clean: dict[str, str], br
     from PySide6.QtWidgets import QApplication
 
     from slidemage import alt_images, slide_ids, slide_source, slide_versioning
-    from slidemage.ai import claude_runner, claude_tasks
-    from slidemage.ai.claude_images import DESCRIBE
+    from slidemage.ai import claude_tasks
+    from claude.code import runner as claude_runner
+    from claude.code.images import DESCRIBE
     from slidemage.ui import layout_settings
     from slidemage.ui.workspace.chat.gui_workspace import GuiWorkspace
     from slidemage.ui.workspace.terminal.tasks import TaskRunner, bubbles, deck_bubbles

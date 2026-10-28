@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Stefan Palan, Jürgen Fleiß
 # SPDX-License-Identifier: GPL-3.0-or-later
 """terminal/draft.py: the unsent prompt read off Claude Code's screen, for Switch now."""
-from slidemage.ui.workspace.terminal import draft
+from claude.code.terminal import draft
 
 
 def lines(*shown, dim=None):

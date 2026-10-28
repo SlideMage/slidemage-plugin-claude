@@ -14,7 +14,7 @@ import sys
 import pytest
 from conftest import SLIDE_TEXT
 
-from slidemage.ai import claude_hook
+from claude.code import hook as claude_hook
 from slidemage.slide_protection import PROTECTED_MESSAGE
 
 from slidemage.project import ProjectContext

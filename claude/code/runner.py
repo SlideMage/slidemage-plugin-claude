@@ -22,10 +22,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..processes import no_console_kwargs
-from ..project import ProjectContext
-from . import claude_tasks, translation_style
-from .claude_launch import clean_environment
+from slidemage.processes import no_console_kwargs
+from slidemage.project import ProjectContext
+from slidemage.ai import claude_tasks, translation_style
+from claude.code.launch import clean_environment
 
 # The default of Claude Code tasks: Haiku at medium effort, tested by the user as good enough (2026-10-13;
 # docs/CLAUDE_CODE_TASKS_BENCHMARK.md measured Sonnet). A text task takes 2-10 s there (the slowest run 13 s),

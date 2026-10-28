@@ -18,11 +18,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ..cli import CLAUDE_HOOK_FLAG
-from ..processes import no_console_kwargs
-from .claude_scope import FOCUS_ENV
-from .image_instructions import IMAGE_DESCRIPTION_RULES
-from .tools import CLAUDE_CODE_PRE_APPROVED
+from slidemage.cli import CLAUDE_HOOK_FLAG
+from slidemage.processes import no_console_kwargs
+from claude.code.scope import FOCUS_ENV
+from slidemage.ai.image_instructions import IMAGE_DESCRIPTION_RULES
+from slidemage.ai.tools import CLAUDE_CODE_PRE_APPROVED
 
 SERVER_NAME = "slidemage"
 TOKEN_ENV = "SLIDEMAGE_MCP_TOKEN"

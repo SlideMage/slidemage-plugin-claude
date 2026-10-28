@@ -24,8 +24,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from .. import app_settings
-from ..project import ProjectContext
+from slidemage import app_settings
+from slidemage.project import ProjectContext
 
 ENV_VAR = "ANTHROPIC_API_KEY"
 KEYRING_SERVICE = "SlideMage"

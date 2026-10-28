@@ -16,8 +16,9 @@ import pytest
 from conftest import SLIDE_TEXT
 from fake_claude import make_fake_claude
 
-from slidemage.ai import claude_runner, claude_tasks
-from slidemage.ai.claude_runner import CANCELLED, DONE, FAILED, NOTHING
+from slidemage.ai import claude_tasks
+from claude.code import runner as claude_runner
+from claude.code.runner import CANCELLED, DONE, FAILED, NOTHING
 from slidemage.ai.tools.base import ToolError
 from slidemage.ai.tools.edits import write_text
 from slidemage.project import ProjectContext

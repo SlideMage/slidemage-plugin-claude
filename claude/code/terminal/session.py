@@ -19,14 +19,15 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from .... import compiler
-from ....ai import ai_profile, claude_launch, claude_scope
-from ....ai.agent_types import EDIT_AUTO
-from ....ai.mcp_server import McpServer
-from ....ai.tools import CLAUDE_CODE_TOOLS, ToolBox, build_toolbox
-from ....pty_process import PtyProcess
-from ..chat.gui_workspace import GuiWorkspace
-from .sync import DiskSync
+from slidemage import compiler
+from slidemage.ai import ai_profile
+from claude.code import launch as claude_launch, scope as claude_scope
+from slidemage.ai.agent_types import EDIT_AUTO
+from claude.code.mcp_server import McpServer
+from slidemage.ai.tools import CLAUDE_CODE_TOOLS, ToolBox, build_toolbox
+from slidemage.pty_process import PtyProcess
+from slidemage.ui.workspace.chat.gui_workspace import GuiWorkspace
+from slidemage.ui.workspace.terminal.sync import DiskSync
 
 
 class ClaudeCodeSession(QObject):

@@ -7,7 +7,7 @@ from __future__ import annotations
 import io
 import json
 
-from slidemage.ai import claude_hook, claude_scope
+from claude.code import hook as claude_hook, scope as claude_scope
 
 
 def publish(tmp_path, scope, slide="slides/1aa-EN-One-current.tex", dirty=False):
@@ -59,7 +59,7 @@ def test_failed_focus_publish_is_retried_without_a_focus_change(qapp, tmp_path, 
     from types import SimpleNamespace
 
     from slidemage.project import ProjectContext
-    from slidemage.ui.workspace.terminal.session import ClaudeCodeSession
+    from claude.code.terminal.session import ClaudeCodeSession
 
     window = SimpleNamespace(
         project=ProjectContext.at(tmp_path),
@@ -94,7 +94,7 @@ def test_a_restart_resumes_the_conversation_only_when_claude_code_saved_it(qapp,
     from types import SimpleNamespace
 
     from slidemage.project import ProjectContext
-    from slidemage.ui.workspace.terminal import session as session_mod
+    from claude.code.terminal import session as session_mod
 
     started = []
 

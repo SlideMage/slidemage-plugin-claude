@@ -6,7 +6,7 @@ from __future__ import annotations
 import http.client
 import json
 
-from slidemage.ai.mcp_server import McpServer
+from claude.code.mcp_server import McpServer
 
 
 class Client:

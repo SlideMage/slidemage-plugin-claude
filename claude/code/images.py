@@ -15,9 +15,10 @@ import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from .. import alt_draft, alt_images, translation_prompts
-from ..project import ProjectContext
-from . import claude_runner, claude_tasks
+from slidemage import alt_draft, alt_images, translation_prompts
+from slidemage.project import ProjectContext
+from slidemage.ai import claude_tasks
+from claude.code import runner as claude_runner
 
 # The tasks of the bubbles. Their rules are the user's own prompts, which the backends put in at each call.
 DESCRIBE = claude_tasks.Task("describe_images", "", alt_draft.RESPONSE_SCHEMA)

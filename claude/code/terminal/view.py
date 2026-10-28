@@ -23,15 +23,16 @@ from PySide6.QtCore import QCoreApplication, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QColor, QPalette, QShowEvent
 from PySide6.QtWidgets import QFileDialog, QFrame, QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout
 
-from ....ai import ai_profile, claude_launch, claude_tasks
-from ....ai.claude_scope import DECK
-from ... import background
-from ...kit import kit_qss as q
-from ...kit.widgets import Button, Chip, IconButton, IconLabel, SegmentedControl, Surface, caption
-from ..attachments import place_file, save_image
-from ..state import WorkspaceState
-from .draft import input_box_shown, paste_bytes, prompt_draft
-from .tasks import TaskRunner, bubbles
+from slidemage.ai import ai_profile, claude_tasks
+from claude.code import launch as claude_launch
+from claude.code.scope import DECK
+from slidemage.ui import background
+from slidemage.ui.kit import kit_qss as q
+from slidemage.ui.kit.widgets import Button, Chip, IconButton, IconLabel, SegmentedControl, Surface, caption
+from slidemage.ui.workspace.attachments import place_file, save_image
+from slidemage.ui.workspace.state import WorkspaceState
+from claude.code.terminal.draft import input_box_shown, paste_bytes, prompt_draft
+from slidemage.ui.workspace.terminal.tasks import TaskRunner, bubbles
 
 SETUP, TERMINAL = 0, 1
 # switch_session: the pause between the two Esc of Esc Esc, and the time Claude Code gets to save the draft.
@@ -316,8 +317,8 @@ class ClaudeCodeView(Surface):
 
     def _build_terminal(self, claude: Path) -> None:
         # Imported here: the web engine is heavy, and most sessions never open this view.
-        from .session import ClaudeCodeSession
-        from .web import TerminalWidget
+        from claude.code.terminal.session import ClaudeCodeSession
+        from slidemage.ui.workspace.terminal.web import TerminalWidget
 
         if self.terminal is not None:
             return

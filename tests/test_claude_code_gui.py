@@ -24,11 +24,12 @@ from PySide6.QtGui import QDesktopServices, QGuiApplication, QKeySequence, QShor
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel
 
-from slidemage.ai import ai_profile, claude_launch
+from slidemage.ai import ai_profile
+from claude.code import launch as claude_launch
 from slidemage.deck_scan import scan_decks
 from slidemage.ui.workspace.source_file import SAME
-from slidemage.ui.workspace.terminal import session as session_module
-from slidemage.ui.workspace.terminal import view as view_module
+from claude.code.terminal import session as session_module
+from claude.code.terminal import view as view_module
 from slidemage.ui.workspace.terminal.sync import DiskSync
 from slidemage.project import ProjectContext
 
@@ -244,7 +245,7 @@ def test_claude_code_reads_the_unsaved_buffer_and_the_focus_through_mcp(env):
 
 
 def test_switch_to_deck_mode_sets_the_scope_switch(env):
-    from slidemage.ai import claude_scope
+    from claude.code import scope as claude_scope
 
     start_view(env)
     client = Client(env.view.session._server)
@@ -262,7 +263,7 @@ def test_show_slide_brings_a_deck_slide_into_focus(env):
 
 
 def test_the_scope_switch_and_the_focus_reach_the_hooks(env):
-    from slidemage.ai import claude_scope
+    from claude.code import scope as claude_scope
 
     start_view(env)
     env.window.open_slide_editor(env.path)
@@ -481,7 +482,7 @@ def test_saved_chat_choice_applies_on_start_and_restart(env):
 
 
 def test_mcp_toolbox_reads_scope_and_focus_on_gui_thread(env):
-    from slidemage.ai import claude_scope
+    from claude.code import scope as claude_scope
 
     session = session_module.ClaudeCodeSession(env.window, env.fake)
     try:

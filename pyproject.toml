@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# The plugin package imports from the repository's root; the tests import each other's fixtures.
+# The plugin still imports slidemage.* (step 6b of docs/PLAN.md): run with SlideMage's src on the path.
+pythonpath = [".", "tests"]
+testpaths = ["tests"]

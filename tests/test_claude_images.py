@@ -17,7 +17,7 @@ import zlib
 from test_claude_runner import claude  # noqa: F401 -- a fixture
 
 from slidemage import alt_blocks, alt_draft, alt_images, translation_prompts
-from slidemage.ai import claude_images
+from claude.code import images as claude_images
 from slidemage.project import ProjectContext
 
 

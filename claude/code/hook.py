@@ -20,10 +20,10 @@ import sys
 from pathlib import Path
 from hashlib import sha256
 
-from .. import ai_review, alt_images, fileio, project, timing
-from ..project import ProjectContext
-from . import claude_scope
-from ..slide_protection import protected_problem, slide_kind
+from slidemage import ai_review, alt_images, fileio, project, timing
+from slidemage.project import ProjectContext
+from claude.code import scope as claude_scope
+from slidemage.slide_protection import protected_problem, slide_kind
 
 BLOCK = 2
 FROZEN_MESSAGE = ("{name} is a frozen version of a slide: a historical record, read-only. "

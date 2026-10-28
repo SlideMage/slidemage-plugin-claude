@@ -21,7 +21,7 @@ from slidemage.ai.agent_types import (
     ToolSpec,
     UserMessage,
 )
-from slidemage.ai.anthropic_provider import AnthropicProvider
+from claude.api.provider import AnthropicProvider
 from slidemage.ai.providers import Cancelled, ProviderError
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"fake"
