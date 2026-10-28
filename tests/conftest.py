@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Stefan Palan, Jürgen Fleiß
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Until the plugin runs on slidemage.plugin_api (step 6b of docs/PLAN.md), its tests need SlideMage's own test
+"""The 6b draft still waits for the public 3a/3b contracts, so its tests need SlideMage's own test
 support: the example project, the Qt application, the fixtures that isolate settings and caches, and the helpers
 `fake_http` and `agent_fakes`. They come from SlideMage's tests folder: $SLIDEMAGE_TESTS, or ../SlideMage/tests."""
 import importlib.util

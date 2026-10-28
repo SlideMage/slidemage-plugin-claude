@@ -25,8 +25,9 @@ The plugin follows the [SlideMage plugin template](https://github.com/stpalan/sl
 
 ```
 claude/                  the plugin
-  __init__.py            activate(host), still empty (step 6b)
-  credentials.py         the Anthropic key: environment, keychain or file
+  __init__.py            activate(host): two DRAFT routes, combined AI settings, hook entry point
+  host.py                exact 3d host subset + DRAFT route/settings contracts
+  credentials.py         host-owned Anthropic key + lazy legacy migration
   api/provider.py        the Anthropic API client (standard library only)
   code/                  Claude Code: launch, runner (headless tasks), images, MCP server, hook, scope
   code/terminal/         the embedded terminal: session, view, unsent-prompt reader
@@ -35,8 +36,9 @@ tests/                   the plugin's tests
 docs/                    plan, handover, and the list of slidemage.* imports still to replace
 ```
 
-**Status: the plugin does not run yet.** It was cut out of SlideMage and still imports SlideMage's internals (`slidemage.*`), which
-`python build.py --check` refuses until the plugin runs on `slidemage.plugin_api` (step 6b). That failure is expected; the check is not weakened.
+**Status: step 6b is a DRAFT.** It uses the implemented AI host services, but route/AI-settings registration and
+workspace integration still wait for SlideMage 3a/3b/3c. The unchanged `python3 build.py --check` reports 27 remaining
+core imports, inventoried with their waits in [docs/PLAN.md](docs/PLAN.md). This is not a release-ready plugin.
 
 `python build.py --check` checks the plugin against the catalogue's conventions: `plugin.toml`, the package and its `activate(host)`, the imports, no
 compiled files, and a `CHANGELOG.md` entry for the version. The **Check** workflow runs it on every push.
@@ -46,10 +48,10 @@ compiled files, and a `CHANGELOG.md` entry for the version. The **Check** workfl
 ### Tests
 
 The tests need SlideMage on the path (its source for the imports, its `tests/` folder for the example project and the Qt fixtures, through
-`tests/conftest.py`), from a SlideMage with the standard-library Anthropic client:
+`tests/conftest.py`), using the `feature/ai-host-services` source worktree:
 
 ```
-SLIDEMAGE_TESTS=../SlideMage/tests PYTHONPATH=../SlideMage/src:. ../SlideMage/.venv/bin/python -m pytest -q
+SLIDEMAGE_TESTS=../SlideMage/tests PYTHONPATH=../SlideMage/.worktrees/ai-host-services/src:. ../SlideMage/.venv/bin/python -m pytest -q
 ```
 
 `SLIDEMAGE_TESTS` defaults to `../SlideMage/tests`.

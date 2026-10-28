@@ -2,7 +2,8 @@
 
 Turning SlideMage's built-in cloud AI, **Claude Code** and the **Anthropic API**, into the plugin `claude`, released through the SlideMage
 plugin catalogue. Started from the Claude handover (`Handover_2026-10-26-Claude-Plugin.md`, not in any repository yet) and phase 6 of SlideMage's
-`docs/PLUGINS_REMAINING_PLAN.md`. Where things stand now: [Handover.md](Handover.md).
+`docs/PLUGINS_REMAINING_PLAN.md`. Step 6b is now a **DRAFT**, with the implemented 3d services adopted and the unfinished 3a/3c registrations
+expressed as a local Protocol. Where things stand now: [Handover.md](Handover.md).
 
 The plugin is two AI routes (core's `AiRoute`, phase 3a) and what they need:
 
@@ -10,15 +11,15 @@ The plugin is two AI routes (core's `AiRoute`, phase 3a) and what they need:
   protected-region hook, the Slide / Deck scope;
 - `anthropic_api`: the standard-library client and the key (`credentials`).
 
-Each step is one commit (or a few); work pauses after each one for review.
+Changes are grouped into logical commits: host services, draft route registration, and documentation. No release or push is part of 6b.
 
 ## Steps
 
 | | Step | Status |
 |---|---|---|
 | 0 | History: the Claude files filtered out of `feature/anthropic-stdlib` with git-filter-repo | done |
-| 6a | Layout `claude/{api,code,code/terminal}`, the template adopted, the `slidemage.*` imports inventoried and made absolute, tests moved | done (uncommitted at the time of writing) |
-| 6b | Onto the AI host API (after SlideMage's phase 3d) | waits for SlideMage |
+| 6a | Layout `claude/{api,code,code/terminal}`, the template adopted, the `slidemage.*` imports inventoried and made absolute, tests moved | done |
+| 6b | Onto the AI host API | DRAFT implemented; integration waits for 3a/3b/3c and the public export gaps below |
 | 6c | Release: public repository, icon and screenshots, 1.0.0 | waits for 6b |
 
 ### 6a. Layout (done)
@@ -39,9 +40,11 @@ rest as `slidemage.…`. Where a module is imported under its old name (`claude_
 There is **no `bridge/`**: nearly all of the imports below become host calls or neutral types in 6b, and most of what stays core is imported by
 the terminal view, which is rewritten against the host's `terminal()` anyway. A bridge would only move the same absolute imports to another folder.
 
-**`build.py --check` fails on all of these until 6b** (the 42 `slidemage.*` imports and `keyring`). The check is not weakened.
+**Historical 6a inventory:** the checker originally reported 42 `slidemage.*` imports plus `keyring`.
+6b removes direct `keyring` use and adopts the available public API; **27 core-import violations remain**
+(the exact current inventory is below). The check is not weakened.
 
-### The `slidemage.*` imports: what each becomes (6b)
+### The 6a `slidemage.*` inventory and intended replacements
 
 `claude_tasks` (`ai/claude_tasks.py`, to become `ai/tasks.py` in SlideMage's phase 3b) is the task definitions; it is core.
 
@@ -50,7 +53,7 @@ the terminal view, which is rewritten against the host's `terminal()` anyway. A 
 | `api/provider` | `ai.providers`: `ChatReply`, `Message`, `ProviderError`, `Cancelled`, `DEFAULT_ANTHROPIC_MODEL`, `_HttpProvider`, `_image_media_type`, `_error_detail` (**private** ones) | neutral AI types from `plugin_api`; the three private helpers need a public home (or are copied: they are small) |
 | | `ai.agent_types`: `AgentMessage`, `AssistantMessage`, `ToolCall`, `ToolResultsMessage`, `ToolSpec` | neutral agent types from `plugin_api` |
 | | `project.ProjectContext` | the `ctx` the route is given (`provider(ctx, route)`) |
-| `credentials` | `app_settings` (the old key places), `project.ProjectContext` | `host.credentials("claude")`: environment, keychain or file, finds the old places; `keyring` goes with it (the check refuses it) |
+| `credentials` | `app_settings` (the old key places), `project.ProjectContext` | `host.credentials(env_var="ANTHROPIC_API_KEY")`: environment, keychain or file, finds the old places; `keyring` goes with it (the check refuses it) |
 | `code/launch` | `cli.CLAUDE_HOOK_FLAG`; the hook command `-m slidemage.ai.claude_hook` | `add_entry_point("hook", main)` and `entry_point_command("hook")`; `--claude-hook` stays an alias in core for one major version |
 | | `processes.no_console_kwargs` | stays core, via a `plugin_api` helper (or `subprocess` flags inline: 5 lines) |
 | | `ai.image_instructions.IMAGE_DESCRIPTION_RULES`, `ai.tools.CLAUDE_CODE_PRE_APPROVED` | stays core, reached through `ai_tools()` (names the pre-approved tools) and the image task definitions |
@@ -71,23 +74,102 @@ the terminal view, which is rewritten against the host's `terminal()` anyway. A 
 `code/terminal/draft.py` imports nothing from SlideMage.
 
 From the host API (SlideMage phase 3d) the plugin needs, in order of use: `add_ai_route` (two routes), `ai_tools()`, `terminal()`, the
-external-edit watch, `credentials(plugin_id)`, `add_entry_point`, the neutral AI types, `protected_regions`, the focus, `add_settings_section(page="ai", …)`.
+external-edit watch, `credentials(env_var="ANTHROPIC_API_KEY")` (3d: already scoped to this plugin), `add_entry_point`, the neutral AI types, `protected_regions`, the focus, `add_settings_section(page="ai", …)`.
 Handover §8 (from SlideMage): the `chat_surface` lifecycle `stop()` and `restart(model, continue_conversation)`, effort as part of the model choice,
 and a `problem()` that can say "not installed".
 
-### 6b. Onto the AI host API
+### 6b. Onto the AI host API — DRAFT implemented
 
-- `activate(host)`: two `add_ai_route` calls (`claude_code`, `anthropic_api`), the AI settings section (today's Cloud tab with the Claude Code
-  status, an API-key field), and `add_entry_point("hook")`.
-- Replace every `slidemage.*` import per the table; `build.py --check` passes.
-- `claude_launch` builds the hook command from `entry_point_command`.
-- The settings and the key are found in their old places (`credentials`, the old `app_settings` keys), so a project that used the built-in Claude
-  keeps working; stored route ids `local`→`ollama`, `api`→`anthropic_api` are core's.
-- `plugin.toml`: `requires_slidemage` to the first SlideMage with the host (now `>=10.0`).
-- Tests: the plugin's own against a fake host, which run anywhere (`credentials`, `api/provider` against `fake_http`, `launch`, `scope`, `hook`,
-  `runner`, `mcp_server`, `draft`); the ones that need Qt and SlideMage (`test_claude_code_gui`, `test_claude_scope`'s session tests) in `tests/bridge/`
-  or against SlideMage's environment. Check runs both. The tests' dependency on SlideMage's `tests/conftest.py` goes (`tests/conftest.py` here).
-- Remove `slidemage.ai.claude_hook` and friends from SlideMage (Stefan's side; phase 7).
+Contract sources inspected read-only on 2026-10-28:
+
+- SlideMage `feature/ai-routes` at `38ea44c`: `docs/PLUGINS_REMAINING_PLAN.md`, steps 3a/3b/3c/3d;
+- SlideMage `feature/ai-host-services` at `387467d`: `plugin_api.py`, `plugins/{host,credentials,migrate,entry}.py`,
+  `ui/workspace/terminal/service.py` (and the watch/tool implementations);
+- CampusOnline `9d5a6b9`: the precedent of a local host Protocol and fake host before core implements the registrations.
+
+Implemented here:
+
+- `claude/host.py` describes exactly the host subset used by this plugin. Implemented 3d signatures are preserved,
+  especially `credentials(env_var=None)` (already scoped to the plugin; no plugin-id argument),
+  `ai_tools(scope="slide", *, focus_slide=None, mode="auto", cancel=None, workspace=None)`, terminal/watch,
+  entry points and focus. `AiRoute`, `ChatSurface`, `add_ai_route` and `add_settings_section` are explicitly **DRAFT**.
+- `api/route.py` registers `anthropic_api` / Anthropic API; `code/route.py` registers `claude_code` / Claude Code.
+  Both are cloud routes with today's four task groups and static, offline model choices. Claude Code chat inherits
+  its own model when unset; tasks default to `haiku:medium`. Missing-key/install problems do not choose another route.
+- `activate(host)` registers those two routes, exactly one `("ai", "Claude", build)` settings section and the `hook`
+  entry point. Both routes refer to that same combined section builder. No Qt/provider/runner loading, credential
+  lookup, CLI probing, terminal creation or network during activation.
+- The section builds lazily: a password field, explicit Save key button and Claude Code install/auth status.
+  Auth probing uses `run_in_background`; it is never part of activation. Its final settings-save lifecycle waits for 3c.
+- Host credentials own all new writes. Legacy lookup delegates lazily to core's `legacy_anthropic_key`, which checks
+  the old environment/keychain/machine-settings locations without changing them. Core has **not** exported that helper
+  through `plugin_api`; the private import remains visible to the checker. `settings().legacy_key_replaced` suppresses
+  fallback after an explicit Save/clear, preventing the old key from reappearing on restart. Environment keys still win.
+- `launch.hook_command(host)` quotes `host.entry_point_command("hook")`; no old hook module/flag or guessed source-tree
+  PYTHONPATH is used in plugin launch code. `hook.main(args)` accepts the entry point's argv.
+- The terminal session uses `host.terminal().start(...)`, `watch_external_edits`, `ai_tools` and `focus`; core owns the pty,
+  terminal widget and callback delivery. Stop is idempotent, invalidates late callbacks and polls after the process stops.
+  `restart(choice, continue_conversation)` resumes only when a transcript exists. Shutdown closes the terminal/MCP/watch
+  and removes the temporary focus file. Tests cover failed-start cleanup and retry.
+- Neutral agent types, ToolBox, ChatReply/ProviderError/Cancelled and protected_spans come from `plugin_api`.
+  The unexported private `_HttpProvider`, socket cancellation, error/media helpers are copied with provenance into
+  `api/_http.py`. Small subprocess and atomic JSON helpers live in `_processes.py` and `_files.py`.
+- `tests/fake_host.py` records the draft registrations and host services; `test_activate.py` checks them, verifies 3d
+  parameter signatures against the actual host Protocol, and proves activation has no network/slow work. Launch/scope/hook
+  tests now exercise the moved plugin code and host interfaces.
+
+This is **not installable against 3d alone**: `PluginHost` there has no `add_ai_route` or `add_settings_section`. Do not add
+fallback registrations or publish a release until the real contracts are implemented and integration is checked.
+
+#### Remaining imports — waits for 3a/3b (and the explicit 3d export gaps)
+
+`python3 build.py --check` still exits 1 with **27 violations**, all core imports below. No `keyring` violation remains.
+Counts include separate imports of the same module. These are kept, not hidden behind an allowlist or a bridge.
+
+| Plugin file | Count | Remaining imports / wait |
+|---|---:|---|
+| `api/route.py` | 2 | `alt_draft` provider wrappers: **waits for 3a** public image backend protocols/wrappers |
+| `code/hook.py` | 7 | `ai_review`, `alt_images`, `fileio`, `project` (twice), `timing`, `slide_protection.slide_kind`: **waits for 3a** neutral ctx/classification and a **3d follow-up** for review/sidecar writes; file I/O/timing have no promised public service yet |
+| `code/images.py` | 5 | `alt_draft`, `alt_images`, `translation_prompts`, `project`, `ai.claude_tasks`: **waits for 3a/3b** image types, prompts and `ai/tasks.py` |
+| `code/launch.py` | 2 | `ai.image_instructions`, `ai.tools.CLAUDE_CODE_PRE_APPROVED`: **waits for 3a** task instructions / a **3d follow-up** for permission metadata; `ai_tools()` returns specs, not the pre-approval policy |
+| `code/runner.py` | 2 | `project`, `ai.{claude_tasks,translation_style}`: **waits for 3a/3b** neutral context, task definitions and style |
+| `code/terminal/session.py` | 1 | `compiler.CancelToken`: **waits for 3a** neutral cancellation type (not exported by 3d) |
+| `code/terminal/view.py` | 6 | `ai.{ai_profile,claude_tasks}`, UI kit/style/widgets, attachments, workspace state, `terminal.tasks`: **waits for 3a/3b** registry UI, task bubbles and chat-surface integration |
+| `credentials.py` | 2 | `plugins.migrate.legacy_anthropic_key`, `project.from_environment`: implemented privately in 3d; **3d follow-up** must expose migration publicly, then remove these imports |
+
+The plan does not yet promise public equivalents for every review/sidecar, timing or UI helper in this table; they must
+be settled during host integration, not assumed to exist. `protected_spans` is already public and adopted.
+
+Additional integration waits:
+
+- **3a:** replace the draft AiRoute Protocol with the real route/selection contract. Keep static model choices and the
+  problem messages. Registry ids/settings migration (`local`→`ollama`, `api`→`anthropic_api`) belongs to core.
+- **3b:** core must construct the plugin's chat surface, attach/re-attach its widget on start/restart, pass a GUI-aware
+  workspace and an external-edit callback that applies reload/conflict/deck-rescan behavior. The 3d watch only reports
+  changes. Without a workspace the draft caches a disk-only toolbox on the UI thread; MCP workers never read host focus.
+  `Focus` only exposes deck/slide/scope, so dirty-buffer/view/language context still needs the 3b contract. The retained
+  view has setup cards, attachments and unsent-draft restoration, but the draft route currently returns the terminal
+  session; integrating those view features and task bubbles remains 3b work.
+- **3c:** finalize settings builder/save semantics and deduplication of the shared Claude section.
+- **3d follow-up:** public legacy-key migration and any missing neutral exports/permission/review services above.
+- **7:** remove core's Claude copies/compatibility routes on the SlideMage side. Never edit that repository from here.
+
+#### Validation and commits (2026-10-28)
+
+With `SLIDEMAGE_TESTS=/home/juergen/github/SlideMage/tests` and
+`PYTHONPATH=/home/juergen/github/SlideMage/.worktrees/ai-host-services/src:.`:
+
+- Offline selection (activation, launch, scope, hook, runner, images, terminal draft): **89 passed**.
+- Suite excluding `test_claude_code_gui.py`: **112 passed, 3 failed, 29 errors**. All 32 non-passes fail creating a local
+  HTTP socket with `PermissionError: [Errno 1] Operation not permitted` in this sandbox (19 agent-client tests, 13 MCP tests).
+- The full `pytest -q` run exits **133 / Trace/breakpoint trap** on reaching the Qt/WebEngine GUI module, without a pytest
+  traceback. Full GUI integration also remains structurally blocked by 3b: the host window still creates its own core view.
+- `python3 build.py --check`: the 27 violations listed above. `compileall` and `git diff --check` pass.
+
+The repository's `.git` is mounted read-only: the requested commit attempt failed creating `.git/index.lock`.
+Logical commits are therefore prepared in a temporary writable Git copy and exported as patches/bundle under
+`/tmp/claude-6b-commits/`; the repository branch/history are untouched. All prepared commit messages end with
+`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. No push, branch switch or stash.
 
 ### 6c. Release
 
@@ -97,11 +179,9 @@ and a `problem()` that can say "not installed".
 - A pull request to `stpalan/slidemage-website` `registry/plugins.toml` (`releases = ["1.0.0"]`).
 - The catalogue must list 1.0.0 before the first SlideMage without the built-in routes ships (v10.0, the AI-free core).
 
-## Open questions
+## Open questions after the draft
 
-- Private helpers of `ai.providers` that the Anthropic client uses (`_HttpProvider`, `_error_detail`, `_image_media_type`): public in `plugin_api`, or copied
-  into the plugin?
-- `fake_http` and `agent_fakes` (SlideMage's test helpers) are used by `test_agent_claude`; copy them here at 6b?
-- Does `terminal/view.py` stay a Qt widget in the plugin (it is built on core's kit), or does core own the view and the plugin supply only a session
-  (`terminal()` + launch command)? The second would drop most of the UI imports above.
-- `settings.py`: the handover's layout lists it; the AI section's builder goes there at 6b (nothing to put in it at 6a).
+- The public migration/read-only classification/review and sidecar APIs listed above need a host decision.
+- The shared settings section and the session/view/task-card contract must be reconciled with 3a/3b/3c before installation.
+- Tests still borrow SlideMage's fixtures, example project and fake HTTP helpers through `tests/conftest.py`; removing this
+  harness dependency can follow the public API integration. The fake host itself does not load Qt or start services at import.
