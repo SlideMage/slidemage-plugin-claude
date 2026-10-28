@@ -5,7 +5,7 @@ api_version = 1
 requires_slidemage = ">=10.0"
 summary = "Claude Code and the Anthropic API as SlideMage's cloud AI."
 author = "Jürgen Fleiß"
-homepage = "https://github.com/JuergenFleiss/slidemage-plugin-claude"
+homepage = "https://github.com/SlideMage/slidemage-plugin-claude"
 license = "GPL-3.0-or-later"
 needs = ["Claude Code installed and signed in, or an Anthropic API key"]
 network = ["Anthropic: api.anthropic.com and Claude Code's own connections"]
