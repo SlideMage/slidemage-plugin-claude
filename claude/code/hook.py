@@ -20,7 +20,7 @@ from pathlib import Path
 from hashlib import sha256
 
 from slidemage import ai_review, alt_images, fileio, project, timing
-from slidemage.project import ProjectContext
+from typing import Any
 from claude.code import scope as claude_scope
 from slidemage.slide_protection import slide_kind  # DRAFT: classification waits for 3a.
 from slidemage.plugin_api import protected_spans
@@ -85,7 +85,7 @@ def _result(tool: str, args: dict, before: str) -> str | None:
     return text
 
 
-def blocked_reason(ctx: ProjectContext, event: dict) -> str | None:
+def blocked_reason(ctx: Any, event: dict) -> str | None:
     """Why the hook call `event` (Claude Code's JSON) must be blocked, or None to let it go."""
     tool, args = event.get("tool_name"), event.get("tool_input")
     raw = args.get("file_path") if isinstance(args, dict) else None
@@ -113,7 +113,7 @@ def blocked_reason(ctx: ProjectContext, event: dict) -> str | None:
     return protected_problem(before, after) if after is not None else None
 
 
-def record_write(ctx: ProjectContext, event: dict) -> None:
+def record_write(ctx: Any, event: dict) -> None:
     """Pre captures text; successful Post records the slide and inserted calls, and sends a citation
     changed in the image descriptions store (media/alt-text.json) to review.
 

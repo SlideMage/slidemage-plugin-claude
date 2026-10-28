@@ -23,8 +23,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from claude._processes import no_console_kwargs
-from slidemage.project import ProjectContext
-from slidemage.ai import claude_tasks, translation_style
+from typing import Any
+from slidemage.ai import tasks as claude_tasks, translation_style
 from claude.code.launch import clean_environment
 
 # The default of Claude Code tasks: Haiku at medium effort, tested by the user as good enough (2026-10-13;
@@ -201,7 +201,7 @@ def _remove_folder(folder: Path, tries: int = 40, delay: float = 0.05) -> None:
                 time.sleep(delay)
 
 
-def judge(ctx: ProjectContext, task: claude_tasks.Task, captured: str, answer: dict | None, outcome: Outcome,
+def judge(ctx: Any, task: claude_tasks.Task, captured: str, answer: dict | None, outcome: Outcome,
           who: str = "Claude", span: tuple[int, int] | None = None) -> list[str]:
     """Settle `outcome` by the model's `answer` (claude_tasks.check): DONE with the new text, or NOTHING when it
     changes nothing; the problems, when the answer is refused (then `outcome` says so, and they go into the repair
@@ -215,7 +215,7 @@ def judge(ctx: ProjectContext, task: claude_tasks.Task, captured: str, answer: d
     return problems
 
 
-def run_task(ctx: ProjectContext, claude: Path, task: claude_tasks.Task, captured: str, request: str, model: str = MODEL,
+def run_task(ctx: Any, claude: Path, task: claude_tasks.Task, captured: str, request: str, model: str = MODEL,
              effort: str = EFFORT, deadline_s: float = TEXT_DEADLINE_S,
              cancel: threading.Event | None = None, span: tuple[int, int] | None = None) -> Outcome:
     """Run `task` on the `captured` text with `request` (claude_tasks.translate_request / fix_request) and
@@ -250,7 +250,7 @@ def run_task(ctx: ProjectContext, claude: Path, task: claude_tasks.Task, capture
 class SlideTranslator:
     """slide_add.translate_body on Claude Code: the Translate task on a slide body, its answer checked. What
     the Add slide sheet holds in place of a provider: it takes no Ollama slot and abort() ends the process."""
-    ctx: ProjectContext
+    ctx: Any
     claude: Path
     model: str
     effort: str

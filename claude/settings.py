@@ -8,7 +8,7 @@ Claude Code auth status is checked on a worker, never during activate().
 from __future__ import annotations
 
 from claude.credentials import ApiCredentials
-from claude.host import Host
+from slidemage.plugin_api import Host
 
 
 def build(host: Host, credentials: ApiCredentials):

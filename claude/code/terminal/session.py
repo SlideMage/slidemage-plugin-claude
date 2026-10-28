@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Claude's MCP server, focus file and host terminal/watch lifecycle.
 
-DRAFT 3a/3b: core supplies ctx, a GUI-aware workspace and on_change to apply edits
-(reload/conflicts/deck rescans). 3d's watch reports changes; it does not apply them.
+The view supplies a GUI-aware workspace and on_change to apply edits
+(reload/conflicts/deck rescans). The host watch reports changes; it does not apply them.
 The host terminal owns the pty, widget, thread delivery and stale-output guard.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 from slidemage import compiler  # DRAFT: CancelToken is not exported yet (3a).
 from slidemage.plugin_api import ExternalEdits, ToolBox
-from claude.host import Host
+from slidemage.plugin_api import Host
 from claude.code import launch, scope
 from claude.code.mcp_server import McpServer
 
@@ -100,7 +100,7 @@ class ClaudeCodeSession(QObject):
             raise
 
     def restart(self, choice: str, continue_conversation: bool) -> None:
-        """DRAFT chat_surface lifecycle; core reattaches widget after restart (3b)."""
+        """Restart on a choice, resuming the conversation when requested."""
         self.choice = choice
         self.start(resume=continue_conversation)
 

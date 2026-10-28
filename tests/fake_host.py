@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Stefan Palan, Jürgen Fleiß
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Recorded DRAFT registrations and 3d services; no network, Qt, keychain or CLI."""
+"""Structural Host fake: recorded registrations and services, with unused operations unavailable."""
 from __future__ import annotations
 
 import os
@@ -64,6 +64,13 @@ class FakeWatch:
         self.stops.append(last_look)
         self.running = False
 
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, *exc):
+        self.stop()
+
     def emit(self, **changes):
         self.on_change(SimpleNamespace(**{"added": (), "removed": (), "modified": (), **changes}))
 
@@ -100,6 +107,33 @@ class FakeHost:
         self.current_focus = SimpleNamespace(deck=None, slide=None, scope="slide")
         self.active = True
         self.argv = [sys.executable, "-m", "slidemage", "--plugin", "claude:hook"]
+
+    def cache_dir(self):
+        path = self.root / ".cache"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def legacy_cache_dir(self):
+        return None
+
+    def _unavailable(self):
+        raise NotImplementedError("FakeHost does not implement this unused operation")
+
+    def add_command(self, id, title, run, enabled=lambda deck: True): self._unavailable()
+    def add_menu_entry(self, menu, command_id): self._unavailable()
+    def add_deck_settings_tab(self, title, build, footer_action=None): self._unavailable()
+    def add_settings_tab(self, title, build): self._unavailable()
+    def add_sidebar_box(self, key, title, build, size="compact", when=lambda deck: True): self._unavailable()
+    def refresh_sidebar_box(self, key): self._unavailable()
+    def add_render_priority(self, soon): self._unavailable()
+    def insert_positions(self, deck): self._unavailable()
+    def insert_slides(self, deck, position, slides, language): self._unavailable()
+    def edit_deck_text(self, deck, change): self._unavailable()
+    def deck_language(self, deck): self._unavailable()
+    def open_url(self, url): self._unavailable()
+    def open_deck_settings(self, deck, tab=None): self._unavailable()
+    def log(self, message): self._unavailable()
+    def show_message(self, text, error=False): self._unavailable()
 
     def _register(self):
         if not self.active:

@@ -1,14 +1,17 @@
 # SPDX-FileCopyrightText: 2026 Stefan Palan, Jürgen Fleiß
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""DRAFT 3a/3b: Claude Code tasks (-p) and its terminal chat surface."""
+"""Claude Code's task runner and terminal conversation route."""
 from __future__ import annotations
 
-from typing import Any, Callable
+import threading
+from typing import Any
 
+from slidemage.plugin_api import Host, Route
 from claude.api.route import TASKS
-from claude.host import Host, Widget
 
 NO_CLAUDE = "Claude Code is not installed on this computer, so nothing was sent and no other model is used."
+CHAT_IN_TERMINAL = ("On Cloud · Claude Code the conversation is the terminal in the assistant; the chat "
+                    "with Ollama or the API is not available on this route.")
 MODELS = ("sonnet", "haiku", "opus")
 EFFORTS = ("low", "medium", "high")
 
@@ -18,14 +21,12 @@ class ClaudeCodeRoute:
     service = "Claude Code"
     is_local = False
     tasks = TASKS
-    provider = None  # the conversation is a terminal; tasks run through claude -p
 
-    def __init__(self, host: Host, settings_section: Callable[[], Widget]) -> None:
-        self.host, self.settings_section = host, settings_section
+    def __init__(self, host: Host) -> None:
+        self.host = host
 
-    def problem(self, ctx: Any, task: str) -> str:
-        from claude.code.launch import find_claude
-        return "" if find_claude() is not None else NO_CLAUDE
+    def problem(self, ctx: Any, route: Route) -> str:
+        return CHAT_IN_TERMINAL if route.task == "chat" else ""
 
     def model_choices(self, ctx: Any, task: str) -> list[str]:
         return [f"{model}:{effort}" for model in MODELS for effort in EFFORTS]
@@ -35,7 +36,18 @@ class ClaudeCodeRoute:
 
     def choice_label(self, choice: str) -> str:
         model, _, effort = choice.partition(":")
-        return f"{model.capitalize()} · {effort}" if model else "Claude Code default"
+        return f"{model.capitalize()} · {effort}"
+
+    def split_choice(self, choice: str) -> tuple[str, str | None]:
+        model, _, effort = choice.partition(":")
+        return model, effort or None
+
+    def valid_choice(self, ctx: Any, choice: str) -> bool:
+        return choice in self.model_choices(ctx, "chat")
+
+    def work_label(self, route: Route) -> str:
+        return " · ".join(["Claude Code", *([route.model.capitalize(), f"effort {route.effort}"] if route.model
+                                             else ["terminal"])])
 
     @staticmethod
     def _claude():
@@ -46,30 +58,37 @@ class ClaudeCodeRoute:
             raise ProviderError(NO_CLAUDE)
         return path
 
-    def task_runner(self, ctx: Any, route: Any):
-        # DRAFT 3a/3b: callable on a worker, with the captured model/effort.
-        from functools import partial
+    def provider(self, ctx: Any, route: Route):
+        return None
+
+    def task_runner(self, ctx: Any, route: Route):
         from claude.code.runner import run_task
-        return partial(run_task, ctx, self._claude(), model=route.model, effort=route.effort)
+        claude = self._claude()
+        def run(task, captured: str, request: str, cancel=None, span=None):
+            return run_task(ctx, claude, task, captured, request, route.model, route.effort,
+                            cancel=cancel, span=span)
+        return run
 
-    def draft_backend(self, ctx: Any, route: Any):
+    def draft_backend(self, ctx: Any, route: Route, cancel=None):
         from claude.code.images import ClaudeDraftBackend
-        return ClaudeDraftBackend(ctx, self._claude(), route.model, route.effort)
+        return ClaudeDraftBackend(ctx, self._claude(), route.model, route.effort, cancel or threading.Event())
 
-    def translation_backend(self, ctx: Any, route: Any):
+    def translation_backend(self, ctx: Any, route: Route, cancel=None):
         from claude.code.images import ClaudeTranslationBackend
-        return ClaudeTranslationBackend(ctx, self._claude(), route.model, route.effort)
+        return ClaudeTranslationBackend(ctx, self._claude(), route.model, route.effort, cancel or threading.Event())
 
-    def slide_translator(self, ctx: Any, route: Any):
+    def slide_translator(self, ctx: Any, route: Route):
         from claude.code.runner import SlideTranslator
         return SlideTranslator(ctx, self._claude(), route.model, route.effort)
 
-    def chat_surface(self, ctx: Any, route: Any, *, on_change, workspace=None, parent=None):
-        """DRAFT: core attaches session.widget, applies edits and owns the task UI (3b).
+    def chat_surface(self, app, state, scope, tasks):
+        from claude.code.terminal.view import ClaudeCodeView
+        # The public API does not yet provide GUI workspace construction or applying external edits.
+        from slidemage.ui.workspace.chat.gui_workspace import GuiWorkspace
+        from slidemage.ui.workspace.terminal.sync import DiskSync
+        workspace = GuiWorkspace(app)
+        sync = DiskSync(app, state.project.root)
+        return ClaudeCodeView(app, state, scope, tasks, host=self.host, on_change=sync._apply, workspace=workspace)
 
-        Construction does not start the CLI; call start() when the surface is shown.
-        """
-        from claude.code.terminal.session import ClaudeCodeSession
-        choice = f"{route.model}:{route.effort}" if route.model else ""
-        return ClaudeCodeSession(self.host, ctx, self._claude(), choice=choice,
-                                 on_change=on_change, workspace=workspace, parent=parent)
+    def settings_section(self):
+        return None  # registered once for both routes with add_settings_section

@@ -74,12 +74,20 @@ def env(qapp, tmp_path, monkeypatch):
     e.root, e.fake, e.log = root, fake, tmp_path / "fake.log"
     monkeypatch.setenv("FAKE_CLAUDE_LOG", str(e.log))
     monkeypatch.setattr(claude_launch, "find_claude", lambda: fake)
+    from slidemage.ai import routes
+    from slidemage.plugins.host import PluginHost
+    from slidemage.plugins.manifest import read_manifest
+    from claude.code.route import ClaudeCodeRoute
+    routes.all()  # initialize built-ins before replacing this route for the integration fixture
+    host = PluginHost(read_manifest(Path(__file__).resolve().parents[1]), context)
+    monkeypatch.setitem(routes._routes, "claude_code", ClaudeCodeRoute(host))
     e.window = build_window(monkeypatch, context)
+    host.ui = e.window
     e.window.show()
     e.window.state.set_mode("source")           # no Preview render thread to outlive the test
     e.window.state.set_deck(next(d for d in scan_decks(e.window.project) if d.name == "test"))
     e.window.state.set_focused_slide("abc")
-    e.view = e.window.assistant.claude_code
+    e.view = e.window.assistant.surface_for("claude_code")
     e.path = root / SLIDE
     yield e
     e.window.assistant.shutdown()
@@ -100,10 +108,23 @@ def use_claude_code(env):
     env.window.state.set_ai_route(ai_profile.CLOUD, ai_profile.CLAUDE_CODE)
 
 
+def require_local_socket():
+    # A Claude session starts a loopback MCP server; fail immediately if the sandbox forbids it.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM):
+        pass
+
+
 def start_view(env):
+    require_local_socket()
     use_claude_code(env)
     wait_until(lambda: env.view.session is not None and env.view.session.running)
     wait_until(lambda: "Fake Claude Code" in terminal_text(env))
+
+
+def test_plugin_surface_constructed_by_assistant(env):
+    assert isinstance(env.view, view_module.ClaudeCodeView)
+    assert env.view.host.ui is env.window
+    assert env.view.session is None
 
 
 # -- the page's bridge ---------------------------------------------------------------------------------------------
@@ -138,6 +159,7 @@ def test_without_claude_the_view_says_how_to_install_it_and_starts_no_process(en
     assert env.view._stack.currentWidget().isVisibleTo(env.view)
     texts = " ".join(label.text() for label in env.view._stack.currentWidget().findChildren(QLabel))
     assert "not installed" in texts and claude_launch.INSTALL_URL in texts
+    require_local_socket()
     monkeypatch.setattr(claude_launch, "find_claude", lambda: env.fake)
     env.view.setup_button.click()
     wait_until(lambda: env.view.session is not None and env.view.session.running)

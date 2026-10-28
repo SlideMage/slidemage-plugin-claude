@@ -16,8 +16,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from slidemage import alt_draft, alt_images, translation_prompts
-from slidemage.project import ProjectContext
-from slidemage.ai import claude_tasks
+from typing import Any
+from slidemage.ai import tasks as claude_tasks
 from claude.code import runner as claude_runner
 
 # The tasks of the bubbles. Their rules are the user's own prompts, which the backends put in at each call.
@@ -29,7 +29,7 @@ TRANSLATE = claude_tasks.Task("translate_images", "", {
 
 @dataclass
 class _ClaudeBackend:
-    ctx: ProjectContext
+    ctx: Any
     claude: Path
     model: str = claude_runner.MODEL
     effort: str = claude_runner.EFFORT

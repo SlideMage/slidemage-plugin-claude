@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 from claude._processes import no_console_kwargs
-from claude.host import Host
+from slidemage.plugin_api import Host
 from claude.code.scope import FOCUS_ENV
 from slidemage.ai.image_instructions import IMAGE_DESCRIPTION_RULES
 from slidemage.ai.tools import CLAUDE_CODE_PRE_APPROVED

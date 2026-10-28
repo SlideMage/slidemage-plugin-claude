@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Stefan Palan, Jürgen Fleiß
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""DRAFT 3b: retained setup/cards/attachments view; core does not construct it yet.
+"""The Claude Code terminal conversation surface.
 
 The Claude Code body of the assistant card (assistant.py), shown while the route is Cloud · Claude Code: the
 user's own `claude`, running in a terminal in the project folder, connected to SlideMage (session.py).
@@ -25,16 +25,16 @@ from PySide6.QtCore import QCoreApplication, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPalette, QShowEvent
 from PySide6.QtWidgets import QFileDialog, QFrame, QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout
 
-from slidemage.ai import ai_profile, claude_tasks
+from slidemage.ai import ai_profile, tasks as claude_tasks
 from claude.code import launch as claude_launch
 from claude.code.scope import DECK
-from claude.host import Host
+from slidemage.plugin_api import Host
 from slidemage.ui.kit import kit_qss as q
 from slidemage.ui.kit.widgets import Button, Chip, IconButton, IconLabel, SegmentedControl, Surface, caption
 from slidemage.ui.workspace.attachments import place_file, save_image
 from slidemage.ui.workspace.state import WorkspaceState
 from claude.code.terminal.draft import input_box_shown, paste_bytes, prompt_draft
-from slidemage.ui.workspace.terminal.tasks import TaskRunner, bubbles
+from slidemage.ui.workspace.task_bubbles import TaskRunner, bubbles
 
 SETUP, TERMINAL = 0, 1
 # switch_session: the pause between the two Esc of Esc Esc, and the time Claude Code gets to save the draft.
@@ -330,7 +330,9 @@ class ClaudeCodeView(Surface):
         old = self.terminal
         try:
             route = ai_profile.route_for(self.state.project, ai_profile.CLAUDE_CODE, ai_profile.CHAT)
-            self.session.choice = f"{route.model}:{route.effort}" if route.model else ""
+            choice = getattr(self, "_next_choice", None)
+            self._next_choice = None
+            self.session.choice = choice if choice is not None else (f"{route.model}:{route.effort}" if route.model else "")
             self.session.start(*self._size, resume=resume)
             self.terminal = self.session.widget
             if old is not None:
@@ -352,11 +354,17 @@ class ClaudeCodeView(Surface):
         self._set_attachable()
         self.terminal.focus_terminal()
 
-    def restart(self, resume: bool = False) -> None:
-        """Start Claude Code again: a new conversation, or with `resume` the same one (switch_session)."""
+    def restart(self, choice: str | None = None, continue_conversation: bool = False, *, resume: bool = False) -> None:
+        """Restart with the selected model, optionally keeping the conversation and draft."""
+        if choice is not None:
+            self._next_choice = choice
+        if continue_conversation:
+            self.switch_session()
+            return
         if self.session is not None:
             self.session.stop()
-            self.terminal.reset()
+            if self.terminal is not None:
+                self.terminal.reset()
             self._set_attachable()
             self._spawn(resume)
 
@@ -364,6 +372,9 @@ class ClaudeCodeView(Surface):
     def session_live(self) -> bool:
         """Whether the terminal's Claude Code process is running (it cannot be told whether it is idle)."""
         return self.session is not None and self.session.running
+
+    def stop(self) -> None:
+        self.end_session()
 
     def end_session(self) -> None:
         """The AI switch leaves Claude Code: end the process; showing the view again starts a new one."""
@@ -402,3 +413,4 @@ class ClaudeCodeView(Surface):
             self.terminal.deleteLater()
         self.terminal = None
         self.session = None
+        self.workspace.close()

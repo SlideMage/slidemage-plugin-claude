@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Stefan Palan, Jürgen Fleiß
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""The DRAFT contract: cheap registration, exact route choices and host-owned services."""
+"""The public route contract, cheap registration and host-owned services."""
 from __future__ import annotations
 
 import json
@@ -16,6 +16,7 @@ from claude import activate
 from claude.code import hook, launch
 from claude.credentials import ApiCredentials
 from fake_host import FakeHost
+from slidemage.plugin_api import Route
 
 
 @pytest.fixture
@@ -32,7 +33,7 @@ def test_activate_registers_routes_one_combined_section_and_hook(host):
     for route, service in zip(host.routes.values(), ("Anthropic API", "Claude Code")):
         assert route.service == service and route.is_local is False
         assert route.tasks == {"chat", "translation", "image_description", "fixes_notes_transcripts"}
-        assert route.settings_section is build
+        assert route.settings_section() is None
     assert host.entry_points == {"hook": hook.main}
     assert host.secret.env_var == "ANTHROPIC_API_KEY"
     assert not host.terminals and not host.watches and not host.tool_calls
@@ -58,6 +59,7 @@ import sys
 from tempfile import TemporaryDirectory
 from pathlib import Path
 from fake_host import FakeHost
+from slidemage.plugin_api import Route
 from claude import activate
 with TemporaryDirectory() as folder:
     activate(FakeHost(Path(folder)))
@@ -76,15 +78,26 @@ def test_route_problems_and_static_choices(host, monkeypatch):
     monkeypatch.setattr(launch, "find_claude", lambda: None)
     activate(host)
     api, code = host.routes.values()
-    assert api.problem(None, "chat").startswith("No Anthropic API key yet")
+    assert api.problem(None, Route("anthropic_api", "chat")).startswith("No Anthropic API key yet")
     assert api.model_choices(None, "chat") == []
-    assert code.problem(None, "chat").startswith("Claude Code is not installed")
-    assert code.provider is None and api.chat_surface is None and api.task_runner is None
+    assert "conversation is the terminal" in code.problem(None, Route("claude_code", "chat"))
+    assert code.problem(None, Route("claude_code", "translation")) == ""
+    assert code.provider(None, Route("claude_code", "chat")) is None
+    assert api.chat_surface() is None and api.task_runner(None, Route("anthropic_api", "chat")) is None
+    assert api.draft_backend(None, Route("anthropic_api", "chat")) is None
+    assert api.translation_backend(None, Route("anthropic_api", "chat")) is None
+    assert api.split_choice("custom") == ("custom", None) and api.valid_choice(None, "custom")
+    assert not api.valid_choice(None, "")
+    assert api.work_label(Route("anthropic_api", "chat", "custom")) == "custom · API"
+    assert code.split_choice("opus:high") == ("opus", "high")
+    assert code.valid_choice(None, "opus:high") and not code.valid_choice(None, "opus:invalid")
+    assert code.work_label(Route("claude_code", "chat")) == "Claude Code · terminal"
+    assert code.work_label(Route("claude_code", "translation", "opus", "high")) == "Claude Code · Opus · effort high"
     assert code.default_choice("chat") == "" and code.default_choice("translation") == "haiku:medium"
     assert code.choice_label("haiku:medium") == "Haiku · medium"
     assert len(code.model_choices(None, "chat")) == 9
     host.secret.set("sk-host")
-    assert api.problem(None, "chat") == ""
+    assert api.problem(None, Route("anthropic_api", "chat")) == ""
     assert api.default_choice("chat") in api.model_choices(None, "chat")
     provider = api.provider(None, SimpleNamespace(model="chosen-model", task="chat"))
     assert provider.model == "chosen-model" and provider._api_key == "sk-host"
@@ -118,9 +131,14 @@ def test_code_task_runner_and_backends_keep_the_selected_model(host, monkeypatch
     code = host.routes["claude_code"]
     ctx = SimpleNamespace(root=host.root)
     route = SimpleNamespace(model="opus", effort="high", task="translation")
-    code.task_runner(ctx, route)("task", "captured", "request")
-    assert calls == [((ctx, host.root / "claude", "task", "captured", "request"), {"model": "opus", "effort": "high"})]
+    import threading
+    cancel = threading.Event()
+    span = (2, 9)
+    code.task_runner(ctx, route)("task", "captured", "request", cancel, span)
+    assert calls == [((ctx, host.root / "claude", "task", "captured", "request", "opus", "high"), {"cancel": cancel, "span": span})]
+    assert code.draft_backend(ctx, route, cancel).cancel is cancel
     assert isinstance(code.draft_backend(ctx, route), images.ClaudeDraftBackend)
+    assert code.translation_backend(ctx, route, cancel).cancel is cancel
     assert isinstance(code.translation_backend(ctx, route), images.ClaudeTranslationBackend)
     translator = code.slide_translator(ctx, route)
     assert translator.model == "opus" and translator.effort == "high"
@@ -138,8 +156,8 @@ def test_terminal_surface_uses_host_services_and_guards_late_callbacks(qapp, hos
     monkeypatch.setattr(module, "McpServer", Server)
     activate(host)
     changes = []
-    surface = host.routes["claude_code"].chat_surface(
-        SimpleNamespace(root=host.root), SimpleNamespace(model="sonnet", effort="high"), on_change=changes.append)
+    surface = module.ClaudeCodeSession(host, SimpleNamespace(root=host.root), host.root / "claude",
+                                       choice="sonnet:high", on_change=changes.append)
     try:
         assert not host.terminals
         surface.start(with_widget=False)
@@ -193,16 +211,10 @@ def test_settings_builder_saves_key_and_checks_auth_off_activation(qapp, host, m
         page.close()
 
 
-def test_draft_host_keeps_the_implemented_3d_parameter_signatures():
-    from inspect import signature
-    from claude.host import Host
-    from slidemage.plugin_api import Host as CoreHost
-
-    for name in ("add_entry_point", "entry_point_command", "terminal", "watch_external_edits", "credentials",
-                 "ai_tools", "focus", "settings", "run_in_background", "Page", "Field", "caption"):
-        def parameters(method):
-            return [(p.name, p.kind, p.default) for p in signature(method).parameters.values()]
-        assert parameters(getattr(Host, name)) == parameters(getattr(CoreHost, name)), name
+def test_fake_host_exposes_real_host_methods():
+    from inspect import isfunction
+    from slidemage.plugin_api import Host
+    assert {name for name, value in vars(Host).items() if isfunction(value) and not name.startswith("_")} <= set(dir(FakeHost))
 
 
 def test_surface_start_failure_stops_watch_and_can_be_retried(qapp, host, monkeypatch):

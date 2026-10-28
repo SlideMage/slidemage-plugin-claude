@@ -1,5 +1,5 @@
 [tool.pytest.ini_options]
 # The plugin package imports from the repository's root; the tests import each other's fixtures.
-# The 6b draft still has core imports pending 3a/3b: use the ai-host-services worktree's src.
+# The tests use the ai-routes worktree and its test support (see docs/Handover.md).
 pythonpath = [".", "tests"]
 testpaths = ["tests"]

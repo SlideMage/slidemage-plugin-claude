@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Stefan Palan, Jürgen Fleiß
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Claude plugin — DRAFT against SlideMage's planned 3a/3c route registrations."""
+"""Claude plugin registration."""
 from __future__ import annotations
 
-from claude.host import Host
+from slidemage.plugin_api import AiRoute, Host
 
 
 def activate(host: Host) -> None:
@@ -19,7 +19,9 @@ def activate(host: Host) -> None:
     def section():
         return build(host, credentials)
 
-    host.add_ai_route(AnthropicApiRoute(host, credentials, section))
-    host.add_ai_route(ClaudeCodeRoute(host, section))
+    api_route: AiRoute = AnthropicApiRoute(host, credentials)
+    code_route: AiRoute = ClaudeCodeRoute(host)
+    host.add_ai_route(api_route)
+    host.add_ai_route(code_route)
     host.add_settings_section("ai", "Claude", section)
     host.add_entry_point("hook", hook.main)

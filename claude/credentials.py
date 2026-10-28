@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from slidemage.plugin_api import Credentials
-    from claude.host import Host
+    from slidemage.plugin_api import Host
 
 ENV_VAR = "ANTHROPIC_API_KEY"
 SOURCE_ENV, SOURCE_KEYCHAIN, SOURCE_FILE = "environment", "keychain", "file"
