@@ -15,7 +15,7 @@ what you type go to Anthropic (`api.anthropic.com`). Claude Code makes its own f
 control them. The plugin sends nothing anywhere else. Your API key is kept in the system's keychain or in a file only you can read, never in a deck.
 
 **What you need.** Either Claude Code, installed and signed in (Anthropic account with a subscription or API credit), or an Anthropic API key.
-SlideMage 10.0 or later.
+SlideMage 9.1 or later.
 
 ## Development
 
