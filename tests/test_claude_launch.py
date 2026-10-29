@@ -131,6 +131,40 @@ def test_the_hook_command_quotes_the_host_argv_without_guessing_frozen_dispatch(
     assert claude_launch.hook_command(host) == '\"/opt/Slide Mage/SlideMage\" --plugin claude:hook'
 
 
+def test_the_hook_command_on_windows_has_no_backslashes_and_double_quotes_spaces(tmp_path, monkeypatch):
+    r"""Claude Code on Windows runs hooks through Git Bash, where D:\SlideMage\SlideMage.exe lost its backslashes."""
+    monkeypatch.setattr(sys, "platform", "win32")
+    host = FakeHost(tmp_path)
+    host.argv = ["D:\\SlideMage\\SlideMage.exe", "--claude-hook"]
+    assert claude_launch.hook_command(host) == "D:/SlideMage/SlideMage.exe --claude-hook"
+    host.argv = ["C:\\Program Files\\Slide Mage\\python.exe", "-m", "slidemage", "--claude-hook"]
+    assert claude_launch.hook_command(host) == '"C:/Program Files/Slide Mage/python.exe" -m slidemage --claude-hook'
+    host.argv = ["\\\\server\\share\\a b.exe", "--plugin", "claude:hook"]
+    assert claude_launch.hook_command(host) == '"//server/share/a b.exe" --plugin claude:hook'
+    host.argv = ["D:\\a$b\\p.exe"]
+    assert claude_launch.hook_command(host) == '"D:/a\\$b/p.exe"'
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Git Bash on Windows")
+@pytest.mark.parametrize("folder", ["plain", "with space"])
+def test_the_windows_hook_command_runs_through_git_bash_and_cmd(tmp_path, folder):
+    import shutil
+    import subprocess
+    bash = next((b for b in (r"C:\Program Files\Git\bin\bash.exe", shutil.which("bash")) if b and os.path.exists(b)), None)
+    if bash is None:
+        pytest.skip("Git Bash is not installed")
+    script = tmp_path / folder / "tool.py"
+    script.parent.mkdir()
+    script.write_text("import sys; print('ran', sys.argv[1:])")
+    host = FakeHost(tmp_path)
+    host.argv = [sys.executable, str(script), "--claude-hook"]
+    command = claude_launch.hook_command(host)
+    assert "\\" not in command
+    # cmd gets a string, not a list: subprocess would re-quote a list with backslash-escaped double quotes
+    for argv, shell in (([bash, "-c", command], "bash"), (f'cmd /c "{command}"', "cmd")):
+        done = subprocess.run(argv, capture_output=True, text=True)
+        assert done.stdout.strip() == "ran ['--claude-hook']", (shell, done.stdout, done.stderr)
+
 def test_the_frozen_program_runs_the_hook_when_given_the_flag(monkeypatch):
     from slidemage.plugins import entry
     called = []

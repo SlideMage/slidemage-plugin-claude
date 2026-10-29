@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -90,10 +91,27 @@ def signed_in(claude: Path) -> bool | None:
     return logged if isinstance(logged, bool) else None
 
 
+_WINDOWS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
+_SHELL_SAFE = re.compile(r"^[A-Za-z0-9_@%+=:,./-]+$")
+
+
+def _windows_word(arg: str) -> str:
+    """One word of a hook command that bash (Claude Code's shell on Windows, Git Bash), cmd and PowerShell all read
+    the same way. Backslashes in a path are escape characters to bash (D:\\SlideMage\\SlideMage.exe became
+    D:SlideMageSlideMage.exe), so a Windows path gets forward slashes, which every Windows shell and program accepts.
+    A word with a space or a shell character goes in double quotes, the one quote all three understand (bash's
+    single quotes are not quotes to cmd); inside them bash needs \\ " $ ` escaped."""
+    if _WINDOWS_PATH.match(arg):
+        arg = arg.replace("\\", "/")
+    if _SHELL_SAFE.match(arg):
+        return arg
+    return '"' + re.sub(r'([\\"$`])', r"\\\1", arg) + '"'
+
+
 def hook_command(host: Host) -> str:
     """Quote the host-supplied argv; core owns source/frozen entry-point dispatch."""
     argv = host.entry_point_command("hook")
-    return subprocess.list2cmdline(argv) if sys.platform == "win32" else shlex.join(argv)
+    return " ".join(map(_windows_word, argv)) if sys.platform == "win32" else shlex.join(argv)
 
 
 def mcp_config(url: str) -> dict:
