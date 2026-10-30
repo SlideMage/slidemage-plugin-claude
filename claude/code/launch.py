@@ -190,6 +190,11 @@ def clean_environment(claude: Path, base: dict[str, str] | None = None) -> dict[
     return env
 
 
+# The hook finds the project through SlideMage, which reads SLIDEMAGE_PROJECT from v10 on and SLIDEMASTER_PROJECT
+# before; both are set, so the plugin works with either, and v10 says nothing about the old name when the new one is set.
+PROJECT_ENVS = ("SLIDEMAGE_PROJECT", "SLIDEMASTER_PROJECT")
+
+
 def environment(token: str, project: Path, claude: Path, base: dict[str, str] | None = None,
                 focus_file: Path | None = None) -> dict[str, str]:
     """The terminal's environment: a clean login, colour, the token and the hook's project/focus.
@@ -198,7 +203,7 @@ def environment(token: str, project: Path, claude: Path, base: dict[str, str] | 
     """
     env = clean_environment(claude, base)
     env.update({"TERM": "xterm-256color", "COLORTERM": "truecolor", TOKEN_ENV: token,
-                "SLIDEMASTER_PROJECT": str(project)})
+                **{name: str(project) for name in PROJECT_ENVS}})
     if focus_file is not None:
         env[FOCUS_ENV] = str(focus_file)
     return env
