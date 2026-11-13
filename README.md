@@ -1,18 +1,29 @@
 # Claude
 
-Claude as SlideMage's cloud AI, in two ways. Both do the same jobs (the chat, drafting and translating slides, describing images); you choose
-which one SlideMage uses, and can switch at any time.
+Claude in SlideMage, in two ways. You choose which one SlideMage uses, and can switch at any time.
 
-- **Claude Code.** SlideMage opens Claude Code, Anthropic's coding assistant, in a terminal beside the editor and connects it to the open deck.
-  Claude Code reads and edits your slides with SlideMage's own tools, and stays inside what you are looking at: the **Slide / Deck** switch above
-  the terminal says how far a request may reach. Parts of a slide that are protected (SlideMage's protected regions) are refused, whatever
-  Claude Code tries. Tasks that run on their own, such as describing images, use Claude Code too.
+- **Claude Code, in a terminal.** SlideMage opens Claude Code, Anthropic's coding assistant, in a terminal beside the editor and connects it to
+  the open deck. Claude Code reads and edits your slides with SlideMage's own tools, and stays inside what you are looking at: the
+  **Slide / Deck** switch above the terminal says how far a request may reach. Parts of a slide that are protected (SlideMage's protected
+  regions) are refused, whatever Claude Code tries. The terminal is the only thing this way does: SlideMage starts no hidden Claude Code runs
+  of its own. Ask Claude there for what you need, for example "fix the LaTeX errors on this slide"; the task buttons type their prompts there
+  (see below). AI requests of SlideMage's other features need the Anthropic API or a Local model, and say so on this route.
 - **The Anthropic API.** SlideMage talks to Anthropic directly with your API key, with no Claude Code installed. The chat is SlideMage's own, with
-  the same tools; it needs nothing but the Python standard library.
+  the same tools; the task buttons and other features that send a text to a model run on it. It needs nothing but the Python standard library.
+
+**Task buttons on Claude Code.** The task buttons of a slide (translate, update a translation, fix LaTeX, proofread, make concise, better
+title, speaker note, make readable, rewrite and proofread a selection) and of a deck (translate missing slides, update outdated translations, fix
+LaTeX errors, summarise) type a ready prompt into Claude Code's input box. You read it, change it if you like, and send it with Enter yourself:
+SlideMage never sends it, and one click is one prompt. A button for a deck is one prompt for the whole deck, which names the deck and what
+to do, not a list of slides. If Claude Code is busy or its input box holds text, SlideMage says so and types nothing. Describing images and
+translating their descriptions need the Anthropic API or a Local model.
 
 **What leaves your computer.** With either way, the text of the slides you work on, the files and images your requests refer to, and
 what you type go to Anthropic (`api.anthropic.com`). Claude Code makes its own further connections, as Anthropic describes for it; SlideMage does not
-control them. The plugin sends nothing anywhere else. Your API key is kept in the system's keychain or in a file only you can read, never in a deck.
+control them. The plugin sends nothing anywhere else. Your API key is kept in the system's keychain or in a file only you can read, never in a deck. SlideMage starts Claude Code as you
+would yourself: with your environment, so an `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` there, or `CLAUDE_CODE_USE_BEDROCK`,
+`CLAUDE_CODE_USE_VERTEX` or `CLAUDE_CODE_USE_FOUNDRY`, reaches Claude Code and decides how it signs in. The key saved in the plugin is not
+given to Claude Code.
 
 **What you need.** Either Claude Code, installed and signed in (Anthropic account with a subscription or API credit), or an Anthropic API key.
 SlideMage 9.1 or later.
@@ -29,9 +40,8 @@ claude/                  the plugin
   host.py                exact 3d host subset + DRAFT route/settings contracts
   credentials.py         host-owned Anthropic key + lazy legacy migration
   api/provider.py        the Anthropic API client (standard library only)
-  code/                  Claude Code: launch, runner (headless tasks), images, MCP server, hook, scope
+  code/                  Claude Code: launch, MCP server, hook, scope
   code/terminal/         the embedded terminal: session, view, unsent-prompt reader
-tools/                   claude_task_benchmark.py
 tests/                   the plugin's tests
 docs/                    plan, handover, and remaining integration gaps
 ```
