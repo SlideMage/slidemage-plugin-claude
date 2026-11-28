@@ -60,7 +60,7 @@ def check_manifest(meta):
     if not isinstance(api, int) or isinstance(api, bool) or api < 1:
         problems.append("plugin.toml: api_version must be an integer of at least 1")
     if not isinstance(meta.get("requires_slidemage"), str) or not RANGE_RE.match(meta["requires_slidemage"]):
-        problems.append('plugin.toml: requires_slidemage must be a version range such as ">=9.0, <10"')
+        problems.append('plugin.toml: requires_slidemage must be a version range such as ">=1.0, <2"')
     if not isinstance(meta.get("homepage"), str) or not meta["homepage"].startswith("https://"):
         problems.append("plugin.toml: homepage must be an https URL")
     for key in ("needs", "network"):
